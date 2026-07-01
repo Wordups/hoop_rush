@@ -35,7 +35,8 @@ const CHARGE_HOLD := 0.18                            # held-down time that flips
 const POWER_PULL := 0.92                             # pull depth at release >= this = power shot
 const STEPBACK_WINDOW := 1.2                         # s after step-back that the shot bonus lasts
 const STEPBACK_SPEED := 10.0
-const METER_SPEED := 1.65
+const METER_SPEED := 1.15                            # slower needle = 2K-forgiving timing
+const SWEET_EASE := 1.35                             # court-level green-window widener (ShotMath stays verbatim)
 
 # ---- round rules (same as 2D) ----
 const ROUND_TIME := 60.0
@@ -75,6 +76,8 @@ var _move_mag: float = 0.0
 
 # ball
 var ball: MeshInstance3D
+var _ball_flying: bool = false
+var _dribble_t: float = 0.0
 
 # HUD
 var stick: DribbleStick
@@ -251,8 +254,29 @@ func _build_hud() -> void:
 	var hud := CanvasLayer.new()
 	add_child(hud)
 
-	lbl_score = _mk_label(hud, "0", 100, Vector2(0, 70), 1080, HORIZONTAL_ALIGNMENT_CENTER)
-	lbl_timer = _mk_label(hud, "60", 64, Vector2(-40, 60), 1000, HORIZONTAL_ALIGNMENT_RIGHT)
+	# scoreboard panel, top right (score | 60s clock)
+	var board := Panel.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.06, 0.06, 0.09, 0.85)
+	sb.border_color = Color(0.95, 0.34, 0.29)         # jersey-trim red
+	sb.set_border_width_all(4)
+	sb.set_corner_radius_all(18)
+	board.add_theme_stylebox_override("panel", sb)
+	board.position = Vector2(660, 40)
+	board.size = Vector2(380, 150)
+	hud.add_child(board)
+	var cap_score := _mk_label(board, "SCORE", 28, Vector2(30, 14), 150, HORIZONTAL_ALIGNMENT_LEFT)
+	cap_score.modulate = Color(1, 1, 1, 0.55)
+	lbl_score = _mk_label(board, "0", 76, Vector2(30, 44), 150, HORIZONTAL_ALIGNMENT_LEFT)
+	var divider := ColorRect.new()
+	divider.color = Color(1, 1, 1, 0.18)
+	divider.position = Vector2(196, 24)
+	divider.size = Vector2(3, 102)
+	board.add_child(divider)
+	var cap_time := _mk_label(board, "TIME", 28, Vector2(215, 14), 135, HORIZONTAL_ALIGNMENT_RIGHT)
+	cap_time.modulate = Color(1, 1, 1, 0.55)
+	lbl_timer = _mk_label(board, "60", 76, Vector2(215, 44), 135, HORIZONTAL_ALIGNMENT_RIGHT)
+
 	lbl_streak = _mk_label(hud, "", 44, Vector2(40, 60), 600, HORIZONTAL_ALIGNMENT_LEFT)
 	lbl_misses = _mk_label(hud, "", 44, Vector2(40, 130), 600, HORIZONTAL_ALIGNMENT_LEFT)
 	lbl_grade = _mk_label(hud, "", 72, Vector2(0, 380), 1080, HORIZONTAL_ALIGNMENT_CENTER)
@@ -266,8 +290,8 @@ func _build_hud() -> void:
 	hud.add_child(stick)
 
 	meter = ShotMeter.new()
-	meter.position = Vector2(140, 1260)
-	meter.size = Vector2(800, 120)
+	meter.position = Vector2(390, 1300)
+	meter.size = Vector2(300, 64)
 	meter.active = false
 	hud.add_child(meter)
 
@@ -348,6 +372,7 @@ func _award_xp(amount: int) -> void:
 # ---------- loop ----------
 func _process(delta: float) -> void:
 	_flick_cd = maxf(_flick_cd - delta, 0.0)
+	_update_ball(delta)
 	if state == "playing":
 		time_left -= delta
 		if time_left <= 0.0:
@@ -355,6 +380,7 @@ func _process(delta: float) -> void:
 			_end_game()
 			return
 		lbl_timer.text = str(int(ceil(time_left)))
+		lbl_timer.modulate = Color(1, 0.35, 0.3) if time_left <= 10.0 else Color(1, 1, 1)
 		_move_player(delta)
 		# held pull-down long enough -> start the shot charge
 		if _down_since >= 0.0 and _now() - _down_since >= CHARGE_HOLD:
@@ -363,12 +389,34 @@ func _process(delta: float) -> void:
 		meter_time += delta
 		meter.t = absf(fmod(meter_time * METER_SPEED, 2.0) - 1.0)
 		meter.charge = pull_depth
-		meter.sweet = ShotMath.sweet_spot(cur_zone, pull_depth >= POWER_PULL, _was_stepback)
+		meter.sweet = minf(ShotMath.sweet_spot(cur_zone, pull_depth >= POWER_PULL, _was_stepback) * SWEET_EASE, 0.92)
 		meter.queue_redraw()
 
 
 func _now() -> float:
 	return Time.get_ticks_msec() / 1000.0
+
+
+## ball follows the player like a live dribble; held at the chest while charging
+func _update_ball(delta: float) -> void:
+	if _ball_flying:
+		return
+	if state not in ["playing", "charging"]:
+		ball.visible = false
+		return
+	ball.visible = true
+	var f3 := Vector3(facing_vec.x, 0, facing_vec.y)
+	var right := Vector3(-facing_vec.y, 0, facing_vec.x)
+	if state == "charging":
+		# gathered into the hands
+		var target: Vector3 = player.position + f3 * 0.28 + Vector3(0, 1.5, 0)
+		ball.position = ball.position.lerp(target, minf(14.0 * delta, 1.0))
+		return
+	# dribble: pounds faster the harder you move
+	_dribble_t += delta * (5.0 + 5.0 * _move_mag)
+	var bounce := absf(sin(_dribble_t)) * 0.72
+	var base: Vector3 = player.position + right * 0.38 + f3 * 0.12
+	ball.position = Vector3(base.x, 0.14 + bounce, base.z)
 
 
 func _move_player(delta: float) -> void:
@@ -529,7 +577,7 @@ func _begin_charge() -> void:
 	var dist := Vector2(player.position.x - RIM_POS.x, player.position.z - RIM_POS.z).length()
 	cur_zone = ShotMath.zone_for_distance(dist, COURT_LEN_M)
 	meter.active = true
-	meter.sweet = ShotMath.sweet_spot(cur_zone, false, _was_stepback)
+	meter.sweet = minf(ShotMath.sweet_spot(cur_zone, false, _was_stepback) * SWEET_EASE, 0.92)
 	facing_vec = Vector2(0, -1)                    # square up to the hoop
 	_update_anim()
 
@@ -538,7 +586,7 @@ func _release_shot() -> void:
 	var power := pull_depth >= POWER_PULL
 	var accuracy := absf(meter.t - 0.5)
 	var side := meter.t - 0.5
-	var sweet := ShotMath.sweet_spot(cur_zone, power, _was_stepback)
+	var sweet := minf(ShotMath.sweet_spot(cur_zone, power, _was_stepback) * SWEET_EASE, 0.92)
 	var res := ShotMath.resolve(cur_zone, accuracy, sweet, side)
 	meter.active = false
 	state = "playing"
@@ -571,6 +619,7 @@ func _apply_shot(res: Dictionary, power: bool) -> void:
 
 
 func _fly_ball(made: bool) -> void:
+	_ball_flying = true
 	ball.visible = true
 	var start: Vector3 = player.position + Vector3(0, 1.2, 0)
 	var target := RIM_POS if made else RIM_POS + Vector3(randf_range(-0.6, 0.6), randf_range(0.0, 0.3), randf_range(-0.2, 0.3))
@@ -580,7 +629,7 @@ func _fly_ball(made: bool) -> void:
 		ball.position = start.lerp(target, t) + Vector3(0, arc * sin(PI * t), 0),
 		0.0, 1.0, 0.55).set_trans(Tween.TRANS_LINEAR)
 	tw.tween_callback(func() -> void:
-		ball.visible = false
+		_ball_flying = false
 		if made and streak >= 3:
 			_play("Cheer", 0.1))
 
