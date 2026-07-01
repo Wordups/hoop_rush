@@ -1,0 +1,27 @@
+{
+  "design": "ESPN-2K5-street x Royal-Match ladder. Each level = hit the target score before the clock (miss cap adds pressure). Clear -> advance + coins/XP; fail -> retry the same level, no backslide. First 10 handcrafted for feel, formula extrapolates beyond.",
+  "levels": [
+    { "level": 1,  "target": 8,   "time": 45, "misses": 5 },
+    { "level": 2,  "target": 12,  "time": 45, "misses": 4 },
+    { "level": 3,  "target": 16,  "time": 42, "misses": 4 },
+    { "level": 4,  "target": 20,  "time": 42, "misses": 3 },
+    { "level": 5,  "target": 26,  "time": 40, "misses": 3, "boss": true },
+    { "level": 6,  "target": 28,  "time": 40, "misses": 3 },
+    { "level": 7,  "target": 32,  "time": 38, "misses": 3 },
+    { "level": 8,  "target": 36,  "time": 38, "misses": 3 },
+    { "level": 9,  "target": 40,  "time": 36, "misses": 3 },
+    { "level": 10, "target": 48,  "time": 36, "misses": 3, "boss": true }
+  ],
+  "beyond": {
+    "notes": "past the authored list: target grows 12%/level from the last authored one, time shrinks 1s/level to a floor, misses fixed",
+    "target_growth": 1.12,
+    "time_step": -1,
+    "time_floor": 26,
+    "misses": 3
+  },
+  "rewards": {
+    "coins_clear": "50 + 15 * level",
+    "xp_clear": "30 + 8 * level + makes * 4",
+    "boss_mult": 2.0
+  }
+}

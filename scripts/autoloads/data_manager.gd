@@ -7,6 +7,7 @@ var courts
 var emotes
 var events
 var levels
+var run_levels   ## the 2K5-street x Royal-Match stage ladder
 var rewards
 var shop_items
 var cosmetics   ## ID addendum — authored later; loads as empty until data/cosmetics.json exists
@@ -17,6 +18,7 @@ func _ready() -> void:
 	emotes = _load("emotes")
 	events = _load("events")
 	levels = _load("levels")
+	run_levels = _load("run_levels")
 	rewards = _load("rewards")
 	shop_items = _load("shop_items")
 	cosmetics = _load("cosmetics")

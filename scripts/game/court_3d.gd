@@ -38,13 +38,16 @@ const STEPBACK_SPEED := 10.0
 const METER_SPEED := 1.15                            # slower needle = 2K-forgiving timing
 const SWEET_EASE := 1.35                             # court-level green-window widener (ShotMath stays verbatim)
 
-# ---- round rules (same as 2D) ----
-const ROUND_TIME := 60.0
-const MAX_MISSES := 3
+# ---- ladder (2K5-street x Royal-Match; defs in data/run_levels.json) ----
+var run_level: int = 1
+var level_target: int = 8
+var level_time: float = 45.0
+var level_misses: int = 5
+var level_boss: bool = false
 
 # ---- state ----
 var state: String = "ready"                          # ready | playing | charging | results
-var time_left: float = ROUND_TIME
+var time_left: float = 45.0
 var score: int = 0
 var makes: int = 0
 var misses: int = 0
@@ -90,6 +93,7 @@ var lbl_grade: Label
 var lbl_center: Label
 var results_panel: Control
 var lbl_results: Label
+var cap_level: Label
 
 
 func _ready() -> void:
@@ -265,9 +269,9 @@ func _build_hud() -> void:
 	board.position = Vector2(660, 40)
 	board.size = Vector2(380, 150)
 	hud.add_child(board)
-	var cap_score := _mk_label(board, "SCORE", 28, Vector2(30, 14), 150, HORIZONTAL_ALIGNMENT_LEFT)
-	cap_score.modulate = Color(1, 1, 1, 0.55)
-	lbl_score = _mk_label(board, "0", 76, Vector2(30, 44), 150, HORIZONTAL_ALIGNMENT_LEFT)
+	cap_level = _mk_label(board, "LVL 1", 28, Vector2(30, 14), 150, HORIZONTAL_ALIGNMENT_LEFT)
+	cap_level.modulate = Color(1, 1, 1, 0.55)
+	lbl_score = _mk_label(board, "0/8", 54, Vector2(30, 54), 160, HORIZONTAL_ALIGNMENT_LEFT)
 	var divider := ColorRect.new()
 	divider.color = Color(1, 1, 1, 0.18)
 	divider.position = Vector2(196, 24)
@@ -324,17 +328,43 @@ func _mk_label(parent: Node, txt: String, fs: int, pos: Vector2, width: float, a
 	return l
 
 
+# ---------- ladder ----------
+## level def: authored list first, formula extrapolation beyond it
+func _load_level_def(n: int) -> void:
+	run_level = n
+	var cfg = DataManager.run_levels
+	var authored: Array = cfg.get("levels", []) if cfg is Dictionary else []
+	if n <= authored.size() and n >= 1:
+		var d: Dictionary = authored[n - 1]
+		level_target = int(d.get("target", 8))
+		level_time = float(d.get("time", 45))
+		level_misses = int(d.get("misses", 3))
+		level_boss = bool(d.get("boss", false))
+		return
+	var beyond: Dictionary = cfg.get("beyond", {}) if cfg is Dictionary else {}
+	var last: Dictionary = authored.back() if authored.size() > 0 else {"target": 48, "time": 36, "level": 10}
+	var over := n - int(last.get("level", 10))
+	level_target = int(round(float(last.get("target", 48)) * pow(float(beyond.get("target_growth", 1.12)), over)))
+	level_time = maxf(float(beyond.get("time_floor", 26)), float(last.get("time", 36)) + over * float(beyond.get("time_step", -1)))
+	level_misses = int(beyond.get("misses", 3))
+	level_boss = n % 5 == 0
+
+
 # ---------- state flow ----------
 func _enter_ready() -> void:
 	state = "ready"
-	lbl_center.text = "TAP TO START"
+	_load_level_def(int(SaveManager.data.get("run_level", 1)))
+	var boss_tag := "  👑 BOSS" if level_boss else ""
+	lbl_center.text = "LEVEL %d%s\n%d PTS in %ds\n\nTAP TO PLAY" % [run_level, boss_tag, level_target, int(level_time)]
 	results_panel.visible = false
 	meter.active = false
+	_refresh_hud()
 
 
 func _start_game() -> void:
+	_load_level_def(int(SaveManager.data.get("run_level", 1)))
 	score = 0; makes = 0; misses = 0; streak = 0; coins_earned = 0
-	time_left = ROUND_TIME
+	time_left = level_time
 	state = "playing"
 	lbl_center.text = ""
 	results_panel.visible = false
@@ -342,21 +372,41 @@ func _start_game() -> void:
 	_refresh_hud()
 
 
-func _end_game() -> void:
+func _win_level() -> void:
 	state = "results"
 	meter.active = false
-	var bonus := ShotMath.round_bonus(makes, GameManager.coin_mult(0))
-	coins_earned += bonus
-	var xp_earned := makes * 12 + score * 2
-	SaveManager.data["coins"] = int(SaveManager.data.get("coins", 0)) + coins_earned
-	SaveManager.data["best_score"] = maxi(int(SaveManager.data.get("best_score", 0)), score)
+	_play("Cheer", 0.1)
+	var rw: Dictionary = DataManager.run_levels.get("rewards", {}) if DataManager.run_levels is Dictionary else {}
+	var mult := float(rw.get("boss_mult", 2.0)) if level_boss else 1.0
+	var coins := int(round((50 + 15 * run_level) * mult)) + coins_earned
+	var xp_earned := int(round((30 + 8 * run_level + makes * 4) * mult))
+	SaveManager.data["coins"] = int(SaveManager.data.get("coins", 0)) + coins
+	SaveManager.data["run_level"] = run_level + 1
 	_award_xp(xp_earned)
 	SaveManager.save_game()
-	lbl_results.text = "TIME!\n\nScore  %d\nMakes  %d\nBest  %d\n\n+%d coins\n+%d XP\nLevel %d" % [
-		score, makes, int(SaveManager.data.get("best_score", 0)),
-		coins_earned, xp_earned, int(SaveManager.data.get("level", 1))
+	lbl_results.text = "LEVEL %d CLEARED!%s\n\n%d / %d  in  %ds\nMakes  %d\n\n+%d coins\n+%d XP" % [
+		run_level, ("  👑" if level_boss else ""), score, level_target,
+		int(level_time - time_left), makes, coins, xp_earned
 	]
+	_set_results_button("NEXT LEVEL")
 	results_panel.visible = true
+
+
+func _fail_level(reason: String) -> void:
+	state = "results"
+	meter.active = false
+	# consolation coins for makes still earned this attempt
+	SaveManager.data["coins"] = int(SaveManager.data.get("coins", 0)) + coins_earned
+	SaveManager.save_game()
+	lbl_results.text = "%s\n\nLEVEL %d\n%d / %d\n\nSo close — run it back." % [reason, run_level, score, level_target]
+	_set_results_button("RETRY")
+	results_panel.visible = true
+
+
+func _set_results_button(txt: String) -> void:
+	for c in results_panel.get_children():
+		if c is Button:
+			(c as Button).text = txt
 
 
 func _award_xp(amount: int) -> void:
@@ -377,7 +427,7 @@ func _process(delta: float) -> void:
 		time_left -= delta
 		if time_left <= 0.0:
 			time_left = 0.0
-			_end_game()
+			_fail_level("TIME'S UP!")
 			return
 		lbl_timer.text = str(int(ceil(time_left)))
 		lbl_timer.modulate = Color(1, 0.35, 0.3) if time_left <= 10.0 else Color(1, 1, 1)
@@ -609,12 +659,18 @@ func _apply_shot(res: Dictionary, power: bool) -> void:
 		if _was_stepback:
 			tag = "STEP-BACK " + tag
 		_popup_grade("%s  %s!" % [tag, res.grade], Color(0.4, 1, 0.5))
+		if score >= level_target:
+			_refresh_hud()
+			_win_level()
+			return
 	else:
 		misses += 1
 		streak = 0
 		_popup_grade(res.grade, Color(1, 0.5, 0.45))
-		if misses >= MAX_MISSES:
-			_end_game()
+		if misses >= level_misses:
+			_refresh_hud()
+			_fail_level("OUT OF MISSES!")
+			return
 	_refresh_hud()
 
 
@@ -644,6 +700,9 @@ func _popup_grade(txt: String, col: Color) -> void:
 
 
 func _refresh_hud() -> void:
-	lbl_score.text = str(score)
+	cap_level.text = "LVL %d%s" % [run_level, " 👑" if level_boss else ""]
+	lbl_score.text = "%d/%d" % [score, level_target]
+	lbl_score.modulate = Color(0.45, 1, 0.55) if score >= level_target else Color(1, 1, 1)
+	lbl_timer.text = str(int(ceil(time_left)))
 	lbl_streak.text = ("🔥 x%d" % streak) if streak >= 3 else (("x%d" % streak) if streak > 0 else "")
-	lbl_misses.text = "✗".repeat(misses)
+	lbl_misses.text = "✗".repeat(misses) + "•".repeat(maxi(level_misses - misses, 0))
