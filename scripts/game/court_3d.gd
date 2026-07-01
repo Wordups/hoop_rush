@@ -82,6 +82,13 @@ var ball: MeshInstance3D
 var _ball_flying: bool = false
 var _dribble_t: float = 0.0
 
+# audio
+var music: AudioStreamPlayer
+var sfx_swish: AudioStreamPlayer
+var sfx_rim: AudioStreamPlayer
+var sfx_clear: AudioStreamPlayer
+var sfx_fail: AudioStreamPlayer
+
 # HUD
 var stick: DribbleStick
 var meter: ShotMeter
@@ -105,6 +112,7 @@ func _ready() -> void:
 	_build_ball()
 	_build_camera()
 	_build_hud()
+	_build_audio()
 	_enter_ready()
 	if "--shot" in OS.get_cmdline_user_args():
 		_capture_and_quit()
@@ -254,6 +262,24 @@ func _build_camera() -> void:
 	cam.make_current()
 
 
+func _build_audio() -> void:
+	music = _mk_audio("res://assets/audio/music_loop.wav", -11.0)
+	music.finished.connect(music.play)
+	music.play()
+	sfx_swish = _mk_audio("res://assets/audio/sfx_swish.wav", -3.0)
+	sfx_rim = _mk_audio("res://assets/audio/sfx_rim.wav", -5.0)
+	sfx_clear = _mk_audio("res://assets/audio/sfx_clear.wav", -3.0)
+	sfx_fail = _mk_audio("res://assets/audio/sfx_fail.wav", -5.0)
+
+
+func _mk_audio(path: String, db: float) -> AudioStreamPlayer:
+	var pl := AudioStreamPlayer.new()
+	pl.stream = load(path)
+	pl.volume_db = db
+	add_child(pl)
+	return pl
+
+
 func _build_hud() -> void:
 	var hud := CanvasLayer.new()
 	add_child(hud)
@@ -299,6 +325,12 @@ func _build_hud() -> void:
 	meter.active = false
 	hud.add_child(meter)
 
+	_flash_rect = ColorRect.new()
+	_flash_rect.size = Vector2(1080, 1920)
+	_flash_rect.visible = false
+	_flash_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hud.add_child(_flash_rect)
+
 	results_panel = Control.new()
 	results_panel.size = Vector2(1080, 1920)
 	results_panel.visible = false
@@ -307,10 +339,28 @@ func _build_hud() -> void:
 	dim.color = Color(0, 0, 0, 0.72)
 	dim.size = Vector2(1080, 1920)
 	results_panel.add_child(dim)
+	var card := Panel.new()
+	var csb := StyleBoxFlat.new()
+	csb.bg_color = Color(0.07, 0.07, 0.11, 0.96)
+	csb.border_color = Color(0.95, 0.34, 0.29)
+	csb.set_border_width_all(5)
+	csb.set_corner_radius_all(26)
+	card.add_theme_stylebox_override("panel", csb)
+	card.position = Vector2(90, 420)
+	card.size = Vector2(900, 1120)
+	results_panel.add_child(card)
 	lbl_results = _mk_label(results_panel, "", 60, Vector2(0, 500), 1080, HORIZONTAL_ALIGNMENT_CENTER)
 	var again := Button.new()
 	again.text = "PLAY AGAIN"
 	again.add_theme_font_size_override("font_size", 60)
+	var bsb := StyleBoxFlat.new()
+	bsb.bg_color = Color(0.85, 0.25, 0.2)
+	bsb.set_corner_radius_all(20)
+	again.add_theme_stylebox_override("normal", bsb)
+	var bsb2 := bsb.duplicate()
+	bsb2.bg_color = Color(1.0, 0.35, 0.3)
+	again.add_theme_stylebox_override("pressed", bsb2)
+	again.add_theme_stylebox_override("hover", bsb2)
 	again.position = Vector2(290, 1300)
 	again.size = Vector2(500, 160)
 	again.pressed.connect(_start_game)
@@ -321,6 +371,8 @@ func _mk_label(parent: Node, txt: String, fs: int, pos: Vector2, width: float, a
 	var l := Label.new()
 	l.text = txt
 	l.add_theme_font_size_override("font_size", fs)
+	l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+	l.add_theme_constant_override("outline_size", maxi(int(fs / 7.0), 4))
 	l.position = pos
 	l.size = Vector2(width, fs + 20)
 	l.horizontal_alignment = align
@@ -375,6 +427,8 @@ func _start_game() -> void:
 func _win_level() -> void:
 	state = "results"
 	meter.active = false
+	sfx_clear.play()
+	_flash(Color(0.5, 1, 0.6, 0.18))
 	_play("Cheer", 0.1)
 	var rw: Dictionary = DataManager.run_levels.get("rewards", {}) if DataManager.run_levels is Dictionary else {}
 	var mult := float(rw.get("boss_mult", 2.0)) if level_boss else 1.0
@@ -395,6 +449,7 @@ func _win_level() -> void:
 func _fail_level(reason: String) -> void:
 	state = "results"
 	meter.active = false
+	sfx_fail.play()
 	# consolation coins for makes still earned this attempt
 	SaveManager.data["coins"] = int(SaveManager.data.get("coins", 0)) + coins_earned
 	SaveManager.save_game()
@@ -655,6 +710,7 @@ func _apply_shot(res: Dictionary, power: bool) -> void:
 			pts *= 2
 		score += pts
 		coins_earned += ShotMath.make_reward(int(SaveManager.data.get("level", 1)), GameManager.coin_mult(0), res.points, power, on_fire)
+		sfx_swish.play()
 		var tag: String = res.zone_name
 		if _was_stepback:
 			tag = "STEP-BACK " + tag
@@ -664,6 +720,7 @@ func _apply_shot(res: Dictionary, power: bool) -> void:
 			_win_level()
 			return
 	else:
+		sfx_rim.play()
 		misses += 1
 		streak = 0
 		_popup_grade(res.grade, Color(1, 0.5, 0.45))
@@ -691,12 +748,36 @@ func _fly_ball(made: bool) -> void:
 
 
 func _popup_grade(txt: String, col: Color) -> void:
+	var perfect := "PERFECT" in txt
 	lbl_grade.text = txt
-	lbl_grade.modulate = col
+	lbl_grade.modulate = Color(1.0, 0.85, 0.25) if perfect else col
 	lbl_grade.modulate.a = 1.0
+	lbl_grade.pivot_offset = lbl_grade.size * 0.5
+	lbl_grade.scale = Vector2.ONE * (1.65 if perfect else 1.35)
+	lbl_grade.position.y = 380
+	var tw := create_tween().set_parallel(true)
+	tw.tween_property(lbl_grade, "scale", Vector2.ONE, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(lbl_grade, "position:y", 330.0, 0.7).set_trans(Tween.TRANS_SINE)
+	tw.chain().tween_interval(0.35)
+	tw.chain().tween_property(lbl_grade, "modulate:a", 0.0, 0.4)
+	if perfect:
+		_flash(Color(1, 0.95, 0.6, 0.16))
+	# score punch
+	lbl_score.pivot_offset = lbl_score.size * 0.5
+	lbl_score.scale = Vector2.ONE * 1.35
+	create_tween().tween_property(lbl_score, "scale", Vector2.ONE, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
+var _flash_rect: ColorRect
+
+func _flash(col: Color) -> void:
+	if _flash_rect == null:
+		return
+	_flash_rect.color = col
+	_flash_rect.visible = true
 	var tw := create_tween()
-	tw.tween_interval(0.5)
-	tw.tween_property(lbl_grade, "modulate:a", 0.0, 0.5)
+	tw.tween_property(_flash_rect, "color:a", 0.0, 0.28)
+	tw.tween_callback(func() -> void: _flash_rect.visible = false)
 
 
 func _refresh_hud() -> void:
@@ -704,5 +785,13 @@ func _refresh_hud() -> void:
 	lbl_score.text = "%d/%d" % [score, level_target]
 	lbl_score.modulate = Color(0.45, 1, 0.55) if score >= level_target else Color(1, 1, 1)
 	lbl_timer.text = str(int(ceil(time_left)))
-	lbl_streak.text = ("🔥 x%d" % streak) if streak >= 3 else (("x%d" % streak) if streak > 0 else "")
+	if streak >= 3:
+		lbl_streak.text = "🔥 ON FIRE ×2"
+		lbl_streak.modulate = Color(1.0, 0.6, 0.15)
+		lbl_streak.pivot_offset = Vector2(0, lbl_streak.size.y * 0.5)
+		lbl_streak.scale = Vector2.ONE * 1.25
+		create_tween().tween_property(lbl_streak, "scale", Vector2.ONE, 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	else:
+		lbl_streak.modulate = Color(1, 1, 1)
+		lbl_streak.text = ("x%d" % streak) if streak > 0 else ""
 	lbl_misses.text = "✗".repeat(misses) + "•".repeat(maxi(level_misses - misses, 0))
