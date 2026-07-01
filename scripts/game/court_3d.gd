@@ -161,7 +161,7 @@ func _build_floor() -> void:
 ## distant dusk-city wall (hoop-free skyline stitched from the hero art)
 func _build_backdrop() -> void:
 	var tex := load("res://assets/backdrop_city.png") as Texture2D
-	var H := 7.2
+	var H := 8.4
 	var aspect := float(tex.get_width()) / float(tex.get_height())
 	var quad := QuadMesh.new()
 	quad.size = Vector2(H * aspect, H)
@@ -247,9 +247,9 @@ func _build_ball() -> void:
 
 func _build_camera() -> void:
 	var cam := Camera3D.new()
-	cam.position = Vector3(0, 6.2, 9.4)
+	cam.position = Vector3(0, 6.9, 10.6)
 	cam.rotation_degrees = Vector3(-27, 0, 0)
-	cam.fov = 55.0
+	cam.fov = 56.0
 	add_child(cam)
 	cam.make_current()
 
@@ -285,7 +285,7 @@ func _build_hud() -> void:
 	lbl_misses = _mk_label(hud, "", 44, Vector2(40, 130), 600, HORIZONTAL_ALIGNMENT_LEFT)
 	lbl_grade = _mk_label(hud, "", 72, Vector2(0, 380), 1080, HORIZONTAL_ALIGNMENT_CENTER)
 	lbl_grade.modulate.a = 0.0
-	lbl_center = _mk_label(hud, "", 70, Vector2(0, 860), 1080, HORIZONTAL_ALIGNMENT_CENTER)
+	lbl_center = _mk_label(hud, "", 70, Vector2(0, 700), 1080, HORIZONTAL_ALIGNMENT_CENTER)
 
 	stick = DribbleStick.new()
 	stick.size = Vector2(STICK_RADIUS * 2.0, STICK_RADIUS * 2.0)
