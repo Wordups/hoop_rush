@@ -64,12 +64,14 @@ var pull_depth: float = 0.0
 var cur_zone: int = ShotMath.Zone.MID
 var _was_stepback: bool = false
 
-# player (billboard)
-var player: Sprite3D
+# player (fully 3D, KayKit placeholder rig — swap mesh for the #23 later, keep the rig contract)
+var player: Node3D
+var anim: AnimationPlayer
+var _cur_anim: String = ""
 var facing_vec: Vector2 = Vector2(0, -1)             # court-space (x, z); (0,-1) faces the hoop
 var _burst_t: float = 0.0
 var _burst_dir: Vector2 = Vector2.ZERO
-var _sprites: Array[Texture2D] = []
+var _move_mag: float = 0.0
 
 # ball
 var ball: MeshInstance3D
@@ -193,16 +195,34 @@ func _build_hoop() -> void:
 
 
 func _build_player() -> void:
-	var names := ["up","up_right","right","down_right","down","down_left","left","up_left"]
-	for i in range(8):
-		_sprites.append(load("res://assets/player/%02d_%s.png" % [i, names[i]]) as Texture2D)
-	player = Sprite3D.new()
-	player.texture = _sprites[0]
-	player.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
-	player.shaded = false
-	player.pixel_size = 2.05 / 118.0
-	player.position = Vector3(0, 2.05 * 0.5 - 0.05, 2.6)
+	player = Node3D.new()
+	player.position = Vector3(0, 0, 2.6)
 	add_child(player)
+	var scene := load("res://assets/models/player_placeholder.glb") as PackedScene
+	var model := scene.instantiate() as Node3D
+	player.add_child(model)
+	# normalize to ~2m tall whatever the source units are
+	var aabb := _combined_aabb(model)
+	if aabb.size.y > 0.01:
+		model.scale = Vector3.ONE * (2.0 / aabb.size.y)
+	anim = model.find_child("AnimationPlayer", true, false) as AnimationPlayer
+	_play("Idle")
+
+
+## play with cross-blend; loop locomotion, one-shot everything else
+func _play(name: String, blend: float = 0.15) -> void:
+	if anim == null or _cur_anim == name:
+		return
+	if not anim.has_animation(name):
+		return
+	_cur_anim = name
+	anim.speed_scale = 1.0
+	anim.play(name, blend)
+	var a := anim.get_animation(name)
+	if name in ["Idle", "Walking_A", "Running_A", "Running_Strafe_Left", "Running_Strafe_Right", "Jump_Idle"]:
+		a.loop_mode = Animation.LOOP_LINEAR
+	else:
+		a.loop_mode = Animation.LOOP_NONE
 
 
 func _build_ball() -> void:
@@ -353,6 +373,7 @@ func _now() -> float:
 
 func _move_player(delta: float) -> void:
 	var pos := player.position
+	_move_mag = 0.0
 	if _burst_t > 0.0:
 		_burst_t -= delta
 		pos.x += _burst_dir.x * BURST_SPEED * delta
@@ -367,20 +388,47 @@ func _move_player(delta: float) -> void:
 			pos.x += mv.x * MOVE_SPEED * delta
 			pos.z += mv.y * MOVE_SPEED * delta
 			facing_vec = mv.normalized()
+			_move_mag = clampf(mv.length(), 0.0, 1.0)
 		elif state == "playing":
 			facing_vec = Vector2(0, -1)      # rest facing the hoop
 	pos.x = clampf(pos.x, -PLAY_X, PLAY_X)
 	pos.z = clampf(pos.z, PLAY_Z_MIN, PLAY_Z_MAX)
 	player.position = pos
-	_update_sprite()
+	_update_anim()
 
 
-func _update_sprite() -> void:
-	# court-space facing -> 8-dir index; (0,-1) = toward hoop = index 0 (back view)
-	var ang := fposmod(rad_to_deg(atan2(facing_vec.x, -facing_vec.y)), 360.0)
-	var idx := int(round(ang / 45.0)) % 8
-	if idx < _sprites.size() and _sprites[idx]:
-		player.texture = _sprites[idx]
+const ONE_SHOTS := ["Throw", "Cheer", "Dodge_Forward", "Dodge_Backward", "Dodge_Left", "Dodge_Right"]
+
+func _combined_aabb(node: Node3D) -> AABB:
+	var result := AABB()
+	var first := true
+	for mi in node.find_children("*", "MeshInstance3D", true, false):
+		var box: AABB = (mi as MeshInstance3D).get_aabb()
+		result = box if first else result.merge(box)
+		first = false
+	return result
+
+
+func _update_anim() -> void:
+	# face along facing_vec (court-space (x,z)); model front ends up toward -facing without the flip
+	player.rotation.y = atan2(facing_vec.x, facing_vec.y)
+	# let one-shots (dodges/throw/cheer) finish before locomotion takes back over
+	if _cur_anim in ONE_SHOTS and anim and anim.is_playing():
+		return
+	if state == "charging":
+		_play("Jump_Idle")
+		return
+	# locomotion: idle -> walk -> run by stick magnitude, speed-scaled inside the band
+	if _move_mag < 0.08:
+		_play("Idle")
+	elif _move_mag < 0.62:
+		_play("Walking_A")
+		if anim:
+			anim.speed_scale = 0.7 + _move_mag
+	else:
+		_play("Running_A")
+		if anim:
+			anim.speed_scale = 0.65 + _move_mag * 0.55
 
 
 # ---------- one-stick input ----------
@@ -408,6 +456,7 @@ func _unhandled_input(event: InputEvent) -> void:
 					_burst_dir = fdir
 					_burst_t = BURST_DUR
 					_flick_cd = FLICK_COOLDOWN
+					_play(_dodge_for(fdir), 0.05)
 
 
 func _update_stick(touch_pos: Vector2) -> void:
@@ -452,6 +501,15 @@ func _in_down_cone(v: Vector2) -> bool:
 
 
 # ---------- shot grammar ----------
+## dodge anim matching a court-space burst direction (relative to the hoop, arcade-simple)
+func _dodge_for(dir: Vector2) -> String:
+	if dir.y < -0.45:
+		return "Dodge_Forward"
+	if dir.y > 0.45:
+		return "Dodge_Backward"
+	return "Dodge_Right" if dir.x > 0.0 else "Dodge_Left"
+
+
 func _step_back() -> void:
 	if state != "playing":
 		return
@@ -459,6 +517,7 @@ func _step_back() -> void:
 	_burst_t = BURST_DUR
 	_stepback_until = _now() + STEPBACK_WINDOW
 	_flick_cd = FLICK_COOLDOWN
+	_play("Dodge_Backward", 0.05)
 
 
 func _begin_charge() -> void:
@@ -472,7 +531,7 @@ func _begin_charge() -> void:
 	meter.active = true
 	meter.sweet = ShotMath.sweet_spot(cur_zone, false, _was_stepback)
 	facing_vec = Vector2(0, -1)                    # square up to the hoop
-	_update_sprite()
+	_update_anim()
 
 
 func _release_shot() -> void:
@@ -483,6 +542,7 @@ func _release_shot() -> void:
 	var res := ShotMath.resolve(cur_zone, accuracy, sweet, side)
 	meter.active = false
 	state = "playing"
+	_play("Throw", 0.05)
 	_apply_shot(res, power)
 
 
@@ -519,7 +579,10 @@ func _fly_ball(made: bool) -> void:
 	tw.tween_method(func(t: float) -> void:
 		ball.position = start.lerp(target, t) + Vector3(0, arc * sin(PI * t), 0),
 		0.0, 1.0, 0.55).set_trans(Tween.TRANS_LINEAR)
-	tw.tween_callback(func() -> void: ball.visible = false)
+	tw.tween_callback(func() -> void:
+		ball.visible = false
+		if made and streak >= 3:
+			_play("Cheer", 0.1))
 
 
 func _popup_grade(txt: String, col: Color) -> void:
