@@ -1,20 +1,64 @@
 extends Node2D
 class_name PlayerAvatar
-## Placeholder player (option C). Movement, 8-dir facing, back-facing rest, depth scaling.
-## Option B (real sprites) swaps the _draw() block for an AnimatedSprite2D driven by
-## `facing` + `state` — nothing else changes.
+## Real 8-directional avatar (option B). Movement, 8-dir facing, back-facing rest, depth
+## scaling unchanged from the placeholder; _draw() now blits the directional sprite that
+## matches facing_index() instead of drawing primitives. Sprites extracted from the
+## commissioned player-model board (files/Player.png), one per DIR_NAMES entry.
 
 @export var move_speed: float = 560.0
 
-var move_dir: Vector2 = Vector2.ZERO      ## set by GameCourt's joystick
+# dribble-move burst (fired by a stick flick)
+const BURST_DUR := 0.22
+const BURST_SPEED := 1240.0
+var _burst_t: float = 0.0
+var _burst_dir: Vector2 = Vector2.ZERO
+
+var move_dir: Vector2 = Vector2.ZERO      ## set by GameCourt's dribble stick
 var facing_vec: Vector2 = Vector2.UP      ## UP = back-facing rest (player looks upcourt at hoop)
 var bounds: Rect2 = Rect2(0, 0, 1080, 1920)
 var state: String = "idle"                ## idle | run | shoot
 var base_scale: float = 1.0
 
 const DIR_NAMES := ["UP", "UP_RIGHT", "RIGHT", "DOWN_RIGHT", "DOWN", "DOWN_LEFT", "LEFT", "UP_LEFT"]
+## index-aligned with DIR_NAMES / facing_index(); 0 = back-facing (upcourt) rest
+const SPRITE_PATHS := [
+	"res://assets/player/00_up.png",
+	"res://assets/player/01_up_right.png",
+	"res://assets/player/02_right.png",
+	"res://assets/player/03_down_right.png",
+	"res://assets/player/04_down.png",
+	"res://assets/player/05_down_left.png",
+	"res://assets/player/06_left.png",
+	"res://assets/player/07_up_left.png",
+]
+const FOOT_Y := 56.0                       ## local-space ground line; feet rest here
+
+var _sprites: Array[Texture2D] = []
+
+func _ready() -> void:
+	for p in SPRITE_PATHS:
+		_sprites.append(load(p) as Texture2D)
+
+## quick size-up burst in a direction (called by the court on a stick flick)
+func dribble_burst(dir: Vector2) -> void:
+	if state == "shoot" or dir.length() < 0.3:
+		return
+	_burst_dir = dir.normalized()
+	_burst_t = BURST_DUR
+
 
 func _process(delta: float) -> void:
+	# dribble-move burst overrides normal movement while it lasts
+	if _burst_t > 0.0 and state != "shoot":
+		_burst_t -= delta
+		state = "run"
+		position += _burst_dir * BURST_SPEED * delta
+		position.x = clampf(position.x, bounds.position.x, bounds.end.x)
+		position.y = clampf(position.y, bounds.position.y, bounds.end.y)
+		facing_vec = _burst_dir
+		_apply_depth()
+		queue_redraw()
+		return
 	var mag := clampf(move_dir.length(), 0.0, 1.0)
 	if mag > 0.08 and state != "shoot":
 		state = "run"
@@ -38,24 +82,14 @@ func facing_index() -> int:
 	return int(round(ang / 45.0)) % 8
 
 func _draw() -> void:
-	# --- placeholder art (swap for AnimatedSprite2D in option B) ---
-	var is_back := facing_index() == 0
-	var jersey := Color(0.86, 0.24, 0.22)
-	var skin := Color(0.86, 0.66, 0.5)
-	# soft ground shadow
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-	draw_circle(Vector2(0, 46), 30, Color(0, 0, 0, 0.22))
-	# legs
-	draw_rect(Rect2(-16, 14, 12, 40), Color(0.15, 0.15, 0.18), true)
-	draw_rect(Rect2(4, 14, 12, 40), Color(0.15, 0.15, 0.18), true)
-	# torso (jersey)
-	draw_rect(Rect2(-24, -34, 48, 54), jersey, true)
-	# head — back of head if facing upcourt, face if turned toward camera
-	draw_circle(Vector2(0, -50), 22, skin)
-	if not is_back:
-		draw_circle(Vector2(-7, -52), 3, Color.BLACK)
-		draw_circle(Vector2(7, -52), 3, Color.BLACK)
-	else:
-		draw_circle(Vector2(0, -54), 12, Color(0.2, 0.14, 0.1))   # hair (back)
-	# facing wedge (debug/juice — direction the player is heading)
-	draw_line(Vector2(0, -8), facing_vec * 54 + Vector2(0, -8), Color(1, 1, 1, 0.35), 4)
+	# soft ground shadow anchored at the feet
+	draw_circle(Vector2(0, FOOT_Y - 6), 30, Color(0, 0, 0, 0.22))
+	var idx := facing_index()
+	if idx >= _sprites.size():
+		return
+	var tex := _sprites[idx]
+	if tex == null:
+		return
+	# blit centered horizontally, feet resting on the local ground line
+	var sz := tex.get_size()
+	draw_texture(tex, Vector2(-sz.x * 0.5, FOOT_Y - sz.y))

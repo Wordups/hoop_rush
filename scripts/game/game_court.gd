@@ -8,7 +8,13 @@ const SCREEN := Vector2(1080, 1920)
 const RIM := Vector2(540, 520)                     # where the hoop sits on screen
 const PLAY_BOUNDS := Rect2(150, 780, 780, 940)     # roamable area (x,y,w,h)
 const COURT_LEN := 1150.0                           # distance reference for zone bands
-const JOY_RADIUS := 150.0
+
+# ---- dribble stick (single small analog stick, NBA-Live feel) ----
+const STICK_CENTER := Vector2(540, 1500)            # fixed base, horizontally centered, thumb zone
+const STICK_RADIUS := 120.0                         # knob travel = base ring (keep == DribbleStick.RADIUS)
+const STICK_ACTIVATE_R := 240.0                     # touch within this of center grabs the stick
+const FLICK_SPEED := 2400.0                         # px/s drag velocity that triggers a dribble burst
+const FLICK_COOLDOWN := 0.32
 
 # ---- round rules ----
 const ROUND_TIME := 60.0
@@ -35,10 +41,11 @@ var cur_zone: int = ShotMath.Zone.MID
 var ball_active: bool = false
 var ball_pos: Vector2 = Vector2.ZERO
 
-# joystick
+# dribble stick
 var joy_active: bool = false
 var joy_index: int = -1
-var joy_origin: Vector2 = Vector2.ZERO
+var stick: DribbleStick
+var _flick_cd: float = 0.0
 
 # nodes
 var player: PlayerAvatar
@@ -105,6 +112,12 @@ func _build_hud() -> void:
 	lbl_grade = _mk_label(hud, "", 72, Vector2(0, 380), 1080, HORIZONTAL_ALIGNMENT_CENTER)
 	lbl_grade.modulate.a = 0.0
 	lbl_center = _mk_label(hud, "", 70, Vector2(0, 900), 1080, HORIZONTAL_ALIGNMENT_CENTER)
+
+	stick = DribbleStick.new()
+	stick.size = Vector2(STICK_RADIUS * 2.0, STICK_RADIUS * 2.0)
+	stick.position = STICK_CENTER - Vector2(STICK_RADIUS, STICK_RADIUS)
+	stick.mouse_filter = Control.MOUSE_FILTER_IGNORE   # court owns the touch input
+	hud.add_child(stick)
 
 	meter = ShotMeter.new()
 	meter.position = Vector2(140, 1600)
@@ -202,6 +215,7 @@ func _award_xp(amount: int) -> void:
 
 # ---------- loop ----------
 func _process(delta: float) -> void:
+	_flick_cd = maxf(_flick_cd - delta, 0.0)
 	if state == "playing":
 		time_left -= delta
 		if time_left <= 0.0:
@@ -228,8 +242,7 @@ func _on_shoot_down() -> void:
 	charge = 0.0
 	meter_time = 0.0
 	player.state = "shoot"
-	player.move_dir = Vector2.ZERO
-	joy_active = false
+	_release_stick()
 	# zone from current distance to rim
 	var dist := player.position.distance_to(RIM)
 	cur_zone = ShotMath.zone_for_distance(dist, COURT_LEN)
@@ -311,7 +324,7 @@ func _draw() -> void:
 		draw_arc(ball_pos, 22, 0, TAU, 24, Color(0.2, 0.1, 0.05), 3.0)
 
 
-# ---------- joystick input ----------
+# ---------- dribble stick input ----------
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventScreenTouch:
 		var t := event as InputEventScreenTouch
@@ -319,18 +332,41 @@ func _unhandled_input(event: InputEvent) -> void:
 			if state == "ready":
 				_start_game()
 				return
-			if state == "playing" and not joy_active:
+			# grab the stick only if the touch lands on/near it (leaves the rest of the
+			# screen free for the SHOOT button + multitouch)
+			if state == "playing" and not joy_active and t.position.distance_to(STICK_CENTER) <= STICK_ACTIVATE_R:
 				joy_active = true
 				joy_index = t.index
-				joy_origin = t.position
-		else:
-			if t.index == joy_index:
-				joy_active = false
-				joy_index = -1
-				if player:
-					player.move_dir = Vector2.ZERO
+				_update_stick(t.position)
+		elif t.index == joy_index:
+			_release_stick()
 	elif event is InputEventScreenDrag:
 		var d := event as InputEventScreenDrag
 		if joy_active and d.index == joy_index and player:
-			var off: Vector2 = d.position - joy_origin
-			player.move_dir = off / JOY_RADIUS
+			_update_stick(d.position)
+			# fast outward flick = NBA-Live dribble move (a quick size-up burst)
+			if _flick_cd <= 0.0 and d.velocity.length() >= FLICK_SPEED:
+				player.dribble_burst(d.velocity.normalized())
+				_flick_cd = FLICK_COOLDOWN
+
+
+func _update_stick(touch_pos: Vector2) -> void:
+	var off: Vector2 = touch_pos - STICK_CENTER
+	if off.length() > STICK_RADIUS:
+		off = off.normalized() * STICK_RADIUS
+	if player:
+		player.move_dir = off / STICK_RADIUS
+	stick.knob = off
+	stick.active = true
+	stick.queue_redraw()
+
+
+func _release_stick() -> void:
+	joy_active = false
+	joy_index = -1
+	if player:
+		player.move_dir = Vector2.ZERO
+	if stick:
+		stick.knob = Vector2.ZERO
+		stick.active = false
+		stick.queue_redraw()
