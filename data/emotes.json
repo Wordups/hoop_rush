@@ -1,0 +1,117 @@
+{
+  "categories": [
+    "shot_celebration",
+    "streak_celebration",
+    "victory_celebration",
+    "entrance",
+    "level_up"
+  ],
+  "unlock_sources": [
+    "shop",
+    "level_milestone",
+    "daily_reward",
+    "event_reward",
+    "leaderboard_reward",
+    "season_pass"
+  ],
+  "emotes": [
+    {
+      "id": "shuffle",
+      "name": "Shuffle",
+      "category": "shot_celebration",
+      "rarity": "common",
+      "unlock": {
+        "source": "shop",
+        "cost_coins": 2000
+      }
+    },
+    {
+      "id": "ball_spin",
+      "name": "Ball Spin",
+      "category": "shot_celebration",
+      "rarity": "common",
+      "unlock": {
+        "source": "shop",
+        "cost_coins": 2000
+      }
+    },
+    {
+      "id": "heat_check_dance",
+      "name": "Heat Check Dance",
+      "category": "streak_celebration",
+      "rarity": "rare",
+      "unlock": {
+        "source": "level_milestone",
+        "level": 30
+      }
+    },
+    {
+      "id": "crown_point",
+      "name": "Crown Point",
+      "category": "victory_celebration",
+      "rarity": "rare",
+      "unlock": {
+        "source": "event_reward"
+      }
+    },
+    {
+      "id": "ice_in_my_veins",
+      "name": "Ice in My Veins",
+      "category": "shot_celebration",
+      "rarity": "epic",
+      "unlock": {
+        "source": "shop",
+        "cost_coins": 8000
+      }
+    },
+    {
+      "id": "flex",
+      "name": "Flex",
+      "category": "victory_celebration",
+      "rarity": "common",
+      "unlock": {
+        "source": "daily_reward"
+      }
+    },
+    {
+      "id": "walk_off",
+      "name": "Walk Off",
+      "category": "victory_celebration",
+      "rarity": "epic",
+      "unlock": {
+        "source": "level_milestone",
+        "level": 60
+      }
+    },
+    {
+      "id": "step_back_shimmy",
+      "name": "Step Back Shimmy",
+      "category": "streak_celebration",
+      "rarity": "rare",
+      "unlock": {
+        "source": "level_milestone",
+        "level": 45
+      }
+    },
+    {
+      "id": "topper_pose",
+      "name": "Topper Pose",
+      "category": "entrance",
+      "rarity": "legendary",
+      "unlock": {
+        "source": "leaderboard_reward"
+      }
+    },
+    {
+      "id": "level_up_bounce",
+      "name": "Level Up Bounce",
+      "category": "level_up",
+      "rarity": "common",
+      "unlock": {
+        "source": "level_milestone",
+        "level": 10
+      }
+    }
+  ],
+  "note": "Original arcade-inspired celebrations. Do not replicate real choreography."
+}

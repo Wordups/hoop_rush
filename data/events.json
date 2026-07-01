@@ -1,0 +1,61 @@
+{
+  "active_event": "fourth_of_july_tournament",
+  "events": [
+    {
+      "id": "fourth_of_july_tournament",
+      "name": "Fourth of July Tournament",
+      "theme": "patriotic",
+      "objectives": [
+        {
+          "id": "make_50_threes",
+          "desc": "Make 50 three-pointers",
+          "target": 50,
+          "metric": "threes_made"
+        },
+        {
+          "id": "streak_10",
+          "desc": "Build a 10-shot streak",
+          "target": 10,
+          "metric": "best_streak"
+        },
+        {
+          "id": "perfect_5",
+          "desc": "Earn 5 perfect releases",
+          "target": 5,
+          "metric": "perfect_releases"
+        },
+        {
+          "id": "runs_3",
+          "desc": "Complete 3 Score Attack runs",
+          "target": 3,
+          "metric": "runs_completed"
+        },
+        {
+          "id": "points_10000",
+          "desc": "Reach 10,000 total event points",
+          "target": 10000,
+          "metric": "event_points"
+        }
+      ],
+      "rewards": [
+        "patriotic_ball_skin",
+        "limited_jersey_july",
+        "event_coins_5000",
+        "event_badge_july",
+        "fireworks_emote"
+      ],
+      "xp_cap_per_day": 2500
+    }
+  ],
+  "future_events": [
+    "Night Runs",
+    "Rooftop Rush",
+    "Winter Court",
+    "All-Star Weekend",
+    "World Tour",
+    "Back to School",
+    "Summer League",
+    "Halloween Court",
+    "Holiday Hoops"
+  ]
+}

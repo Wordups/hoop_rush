@@ -1,0 +1,13 @@
+# Godot 4 — editor cache & import binaries (regenerated on open)
+.godot/
+
+# build / export artifacts
+/export/
+/builds/
+/android/build/
+*.tmp
+*.log
+
+# OS
+.DS_Store
+Thumbs.db

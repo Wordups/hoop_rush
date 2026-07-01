@@ -1,0 +1,41 @@
+{
+  "daily_track": [
+    {
+      "day": 1,
+      "type": "coins",
+      "amount": 500
+    },
+    {
+      "day": 2,
+      "type": "arcade_tokens",
+      "amount": 1
+    },
+    {
+      "day": 3,
+      "type": "badge_xp",
+      "amount": 50
+    },
+    {
+      "day": 4,
+      "type": "coins",
+      "amount": 1000
+    },
+    {
+      "day": 5,
+      "type": "emote_unlock",
+      "emote_id": "flex"
+    },
+    {
+      "day": 6,
+      "type": "arcade_tokens",
+      "amount": 3
+    },
+    {
+      "day": 7,
+      "type": "ball_skin",
+      "item_id": "rare_ball_streak",
+      "rarity": "rare"
+    }
+  ],
+  "reset_rule": "Streak resets if a day is missed; loops after day 7."
+}

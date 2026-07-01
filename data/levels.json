@@ -1,0 +1,101 @@
+{
+  "xp_curve": {
+    "formula": "xp_to_next(level) = round(100 * level^1.35)",
+    "notes": "Skill-based. XP cannot be purchased. Diminishing XP for repeated low-effort runs; bonuses for hard shots and clean streaks."
+  },
+  "xp_sources": [
+    "made_shots",
+    "perfect_releases",
+    "streaks",
+    "deep_shots",
+    "daily_challenge",
+    "event_objective",
+    "tournament_placement",
+    "personal_best",
+    "court_mastery",
+    "badge_challenge"
+  ],
+  "anti_abuse": [
+    "no_direct_xp_purchase",
+    "no_paid_level_skips",
+    "diminishing_xp_low_effort",
+    "daily_challenge_xp_cap",
+    "event_xp_cap",
+    "local_validation_prototype",
+    "server_validation_future"
+  ],
+  "milestones": [
+    {
+      "level": 100,
+      "title": "Street Pioneer",
+      "topper_reward": [
+        "profile_banner_exclusive",
+        "topper_badge_100",
+        "permanent_leaderboard_marker"
+      ]
+    },
+    {
+      "level": 200,
+      "title": "Certified Bucket",
+      "topper_reward": [
+        "jersey_trim_exclusive",
+        "topper_badge_200"
+      ]
+    },
+    {
+      "level": 300,
+      "title": "City Legend",
+      "topper_reward": [
+        "animated_profile_frame",
+        "topper_badge_300"
+      ]
+    },
+    {
+      "level": 400,
+      "title": "Automatic",
+      "topper_reward": [
+        "exclusive_ball_skin",
+        "topper_badge_400"
+      ]
+    },
+    {
+      "level": 500,
+      "title": "Hoop Rush Icon",
+      "topper_reward": [
+        "legendary_profile_trophy",
+        "topper_badge_500"
+      ]
+    },
+    {
+      "level": 600,
+      "title": "Court King",
+      "topper_reward": [
+        "animated_entrance_emote",
+        "topper_badge_600"
+      ]
+    },
+    {
+      "level": 700,
+      "title": "World Topper",
+      "topper_reward": [
+        "global_leaderboard_crown",
+        "topper_badge_700"
+      ]
+    },
+    {
+      "level": 1000,
+      "title": "Immortal Shooter",
+      "topper_reward": [
+        "gold_nameplate",
+        "hall_of_fame",
+        "topper_badge_1000"
+      ]
+    }
+  ],
+  "topper_rules": [
+    "one_player_first_per_milestone",
+    "reward_permanent",
+    "shown_on_profile_and_leaderboard",
+    "cannot_be_purchased"
+  ]
+}

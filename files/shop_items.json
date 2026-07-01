@@ -1,0 +1,65 @@
+{
+  "note": "Mock only. No real purchases. Future iOS: Apple StoreKit consumable IAP.",
+  "token_packs": [
+    {
+      "id": "starter_pack",
+      "name": "Starter Pack",
+      "arcade_tokens": 250,
+      "coins": 5000,
+      "price_placeholder": "$4.99"
+    },
+    {
+      "id": "hooper_pack",
+      "name": "Hooper Pack",
+      "arcade_tokens": 600,
+      "coins": 15000,
+      "price_placeholder": "$8.99"
+    },
+    {
+      "id": "street_legend_pack",
+      "name": "Street Legend Pack",
+      "arcade_tokens": 1500,
+      "coins": 50000,
+      "price_placeholder": "$14.99"
+    },
+    {
+      "id": "event_pack",
+      "name": "Event Pack",
+      "event_tokens": true,
+      "limited_ball_skin": true,
+      "limited_jersey": true,
+      "price_placeholder": "$26.99"
+    }
+  ],
+  "coin_store": [
+    {
+      "id": "court_unlock",
+      "name": "Court Unlock",
+      "type": "court",
+      "cost_coins": "see courts.json"
+    },
+    {
+      "id": "ball_skin",
+      "name": "Ball Skin",
+      "type": "cosmetic",
+      "cost_coins": 3000
+    },
+    {
+      "id": "emote_unlock",
+      "name": "Emote Unlock",
+      "type": "emote",
+      "cost_coins": "see emotes.json"
+    },
+    {
+      "id": "badge_upgrade",
+      "name": "Badge Upgrade",
+      "type": "badge",
+      "cost_coins": "see badges.json"
+    }
+  ],
+  "principles": [
+    "No gambling/casino language",
+    "Tokens extend play, never guarantee wins",
+    "Some tokens always earnable for free"
+  ]
+}

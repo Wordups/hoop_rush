@@ -1,0 +1,109 @@
+{
+  "slots": [
+    {
+      "slot": 1,
+      "unlock_level": 1
+    },
+    {
+      "slot": 2,
+      "unlock_level": 25
+    },
+    {
+      "slot": 3,
+      "unlock_level": 75
+    },
+    {
+      "slot": 4,
+      "unlock_level": 150
+    }
+  ],
+  "upgrade": {
+    "max_level": 5,
+    "cost_curve": "coins = round(150 * 1.6^(badge_level-1))",
+    "badge_xp_curve": "xp_to_next = round(50 * 1.5^(badge_level-1))"
+  },
+  "badges": [
+    {
+      "id": "deadeye",
+      "name": "Deadeye",
+      "rarity": "common",
+      "desc": "Slightly increases the perfect-release window.",
+      "effect": {
+        "type": "perfect_window_pct",
+        "base": 0.06,
+        "per_level": 0.02
+      }
+    },
+    {
+      "id": "heat_check",
+      "name": "Heat Check",
+      "rarity": "rare",
+      "desc": "After 5 perfect makes, your next make earns a bonus multiplier.",
+      "effect": {
+        "type": "bonus_mult_after_perfects",
+        "perfects_required": 5,
+        "base_mult": 1.5,
+        "per_level": 0.1
+      }
+    },
+    {
+      "id": "quick_release",
+      "name": "Quick Release",
+      "rarity": "common",
+      "desc": "Reduces shot charge time.",
+      "effect": {
+        "type": "charge_time_pct",
+        "base": -0.1,
+        "per_level": -0.03
+      }
+    },
+    {
+      "id": "clutch",
+      "name": "Clutch",
+      "rarity": "epic",
+      "desc": "Bonus score in the final 10 seconds of a run.",
+      "effect": {
+        "type": "clutch_score_pct",
+        "base": 0.15,
+        "per_level": 0.05,
+        "window_seconds": 10
+      }
+    },
+    {
+      "id": "ankle_breaker",
+      "name": "Ankle Breaker",
+      "rarity": "rare",
+      "desc": "Improves step-back effectiveness.",
+      "effect": {
+        "type": "stepback_window_pct",
+        "base": 0.12,
+        "per_level": 0.04
+      }
+    },
+    {
+      "id": "deep_range",
+      "name": "Deep Range",
+      "rarity": "epic",
+      "desc": "Bonus points for deep shots.",
+      "effect": {
+        "type": "deep_shot_points_pct",
+        "base": 0.2,
+        "per_level": 0.06
+      }
+    },
+    {
+      "id": "comeback",
+      "name": "Comeback",
+      "rarity": "legendary",
+      "desc": "Bonus XP after continuing with an Arcade Token.",
+      "effect": {
+        "type": "post_continue_xp_pct",
+        "base": 0.25,
+        "per_level": 0.08
+      }
+    }
+  ],
+  "rules": {
+    "no_guaranteed_makes": true
+  }
+}

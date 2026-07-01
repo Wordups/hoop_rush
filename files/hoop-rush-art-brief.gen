@@ -1,0 +1,97 @@
+# Hoop Rush — Environment & Art Brief
+
+## The problem
+Right now everything is drawn with raw canvas shapes (rectangles, arcs, gradients) — no real
+art. It functions but looks like a prototype, not a game. This doc is the asset list so you
+can generate/commission real art elsewhere, then hand the files back and I'll wire them in.
+
+## Current game structure (for context)
+- Single court view, camera looks *toward* the hoop (depth/perspective, not true side-scroll).
+- Levels are infinite; every level = one "round" of shots.
+- Court currently has zero background variety — same gradient forever.
+
+## What "side-scrolling with different backgrounds" means here
+Since shots always face the hoop, true left/right scrolling doesn't fit the shooting camera.
+The version of "side-scrolling" that fits this game: **the background behind/around the court
+scrolls slowly and changes per world**, like a parallax backdrop in Punch-Out or NBA Jam's
+arena crowds — it sells motion and location without changing the shooting mechanic.
+
+Plan: group levels into **Worlds** (e.g. every 10 levels), each with its own backdrop + court
+floor skin. Background layers drift slowly (parallax) during play for a "side-scroller" feel.
+
+---
+
+## Asset list needed
+
+### 1. Backgrounds (per World — need 3 layers each for parallax)
+For each world theme below, provide:
+- **Far layer** (skyline/sky, barely moves) — 1920×1080, seamless horizontally tileable
+- **Mid layer** (crowd/bleachers/city) — 1920×1080, transparent PNG, tileable
+- **Near layer** (foreground silhouettes, e.g. fencing/plants) — 1920×600, transparent PNG
+
+Suggested worlds (reskin every ~10 levels, repeat/remix after):
+1. **Street Court** — chain-link fence, graffiti wall, city skyline sunset
+2. **Indoor Arena** — bleachers, scoreboard, spotlights
+3. **Rooftop Court** — night skyline, string lights, water tower
+4. **Beach Court** — palm trees, ocean, sunset
+5. **Neon Night** — synthwave grid floor, neon skyline, purple/pink sky
+6. **Retro Gym** — wood paneling, old scoreboard, 90s vibe (matches NBA Jam reference)
+
+### 2. Court floor (per world)
+- Top-down-ish floor texture matching the perspective grid already in code
+- 1200×900 PNG, one per world (wood, asphalt, sand, neon-grid, rubber gym floor, etc.)
+
+### 3. Hoop set (1 universal set is fine, maybe 2 style variants: outdoor rim vs indoor glass backboard)
+- Backboard (idle + cracked/shattered state)
+- Rim + net (idle + "swish" flutter frame)
+- Pole
+- Each as separate transparent PNG layers, ~400×500
+
+### 4. Player character (NBA Jam-style exaggerated proportions — big head/torso, small legs)
+Sprite states needed (2D, front/3-quarter facing the hoop):
+- Idle / holding ball
+- Dribble lean-left / lean-right
+- Step-back
+- Shot release (jumpshot)
+- Layup
+- Dunk (regular + "poster dunk" pose)
+Each ~300×500 transparent PNG. If you can get an idle + a 3-4 frame shoot animation, that's enough — the code can tween the rest.
+
+### 5. Defender character
+- Idle guarding pose
+- "Shaken/beaten" pose (off-balance, falling)
+~280×480 transparent PNG, muted color so it reads as background/opponent.
+
+### 6. Ball
+- Normal basketball, ~128×128 transparent PNG
+- "On Fire" variant with flame texture, same size
+
+### 7. Effects (small sprite sheets or individual frames)
+- Backboard shatter shard (1 shard tile, code already scatters/rotates it physically)
+- Fire particle / flame trail tile
+- Net swish flash
+- Confetti or rim-shake dust (optional polish)
+
+### 8. UI
+- Currently emoji-based (🏀🪙🔥). If you want custom icons: coin, basketball, fire streak,
+  each badge (🎯💪🐍🥶🔄🏀) as clean flat icons, ~128×128 PNG.
+
+---
+
+## Technical specs (so files drop in cleanly)
+- **Format:** PNG, transparent background except full-bleed backdrop layers
+- **Style:** flat/vector or painterly cel-shaded — anything consistent across the set works;
+  just keep one consistent style across ALL assets (don't mix photoreal + cartoon)
+- **Color:** keep contrast high against a dark-blue/purple base UI (current HUD is purple/gold)
+- **File naming (suggested):**
+  - `world1_bg_far.png`, `world1_bg_mid.png`, `world1_bg_near.png`, `world1_floor.png`
+  - `player_idle.png`, `player_shoot.png`, `player_dunk.png`, `player_layup.png`, `player_stepback.png`
+  - `defender_idle.png`, `defender_shaken.png`
+  - `hoop_backboard.png`, `hoop_backboard_cracked.png`, `hoop_rim.png`
+  - `ball.png`, `ball_fire.png`
+
+## What I'll do once you bring assets back
+1. Swap the canvas-drawn shapes for `drawImage()` calls using these files.
+2. Add parallax scroll speed per layer (far slowest, near fastest).
+3. Rotate world/background based on `level` (e.g. `world = Math.floor((level-1)/10) % totalWorlds`).
+4. Keep all current mechanics (power meter, dribble, step-back, badges, fire streak, shatter) untouched — this is a visual swap, not a logic rewrite.

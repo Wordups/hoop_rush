@@ -1,0 +1,124 @@
+{
+  "courts": [
+    {
+      "id": "street",
+      "name": "Street Court",
+      "unlock_level": 1,
+      "theme": "sunset_street",
+      "music": "hoop_rush_beats",
+      "mastery": [
+        {
+          "desc": "Make 100 shots",
+          "target": 100
+        },
+        {
+          "desc": "Make 25 perfect shots",
+          "target": 25
+        },
+        {
+          "desc": "Score 10,000 points",
+          "target": 10000
+        }
+      ]
+    },
+    {
+      "id": "night",
+      "name": "Night Court",
+      "unlock_level": 20,
+      "theme": "night_city",
+      "music": "lofi_court",
+      "mastery": [
+        {
+          "desc": "Build a 15-shot streak",
+          "target": 15
+        },
+        {
+          "desc": "Complete 5 daily challenges",
+          "target": 5
+        }
+      ]
+    },
+    {
+      "id": "rooftop",
+      "name": "Rooftop Court",
+      "unlock_level": 40,
+      "theme": "rooftop_skyline",
+      "music": "trap_warmup",
+      "mastery": [
+        {
+          "desc": "Make 150 shots",
+          "target": 150
+        },
+        {
+          "desc": "Score 20,000 points",
+          "target": 20000
+        }
+      ]
+    },
+    {
+      "id": "venice",
+      "name": "Venice Court",
+      "unlock_level": 60,
+      "theme": "beach",
+      "music": "old_school",
+      "mastery": [
+        {
+          "desc": "Make 40 perfect shots",
+          "target": 40
+        }
+      ]
+    },
+    {
+      "id": "snow",
+      "name": "Snow Court",
+      "unlock_level": 100,
+      "theme": "winter",
+      "music": "lofi_court",
+      "mastery": [
+        {
+          "desc": "Build a 20-shot streak",
+          "target": 20
+        }
+      ]
+    },
+    {
+      "id": "underground",
+      "name": "Underground Court",
+      "unlock_level": 150,
+      "theme": "garage",
+      "music": "trap_warmup",
+      "mastery": [
+        {
+          "desc": "Score 30,000 points",
+          "target": 30000
+        }
+      ]
+    },
+    {
+      "id": "tokyo",
+      "name": "Tokyo Court",
+      "unlock_level": 200,
+      "theme": "neon_japan",
+      "music": "hoop_rush_beats",
+      "mastery": [
+        {
+          "desc": "Make 300 shots",
+          "target": 300
+        }
+      ]
+    },
+    {
+      "id": "neon",
+      "name": "Neon Court",
+      "unlock_level": 300,
+      "theme": "synthwave",
+      "music": "hoop_rush_beats",
+      "mastery": [
+        {
+          "desc": "Make 75 perfect shots",
+          "target": 75
+        }
+      ]
+    }
+  ]
+}
