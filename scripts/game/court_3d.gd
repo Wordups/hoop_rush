@@ -22,25 +22,88 @@ const COURT_LEN_M := 13.5
 const CORNER_X := 4.4                                # |x| beyond this AND z < CORNER_Z = corner
 const CORNER_Z := -3.0
 
-# ---- movement ----
-const MOVE_SPEED := 5.4
-const BURST_SPEED := 12.5
+# ---- movement / grammar: tinker-able in the in-game TUNE panel, persisted to save ----
+var MOVE_SPEED := 5.4
+var BURST_SPEED := 12.5
 const BURST_DUR := 0.22
-const FLICK_SPEED := 2400.0
+var FLICK_SPEED := 2400.0
 const FLICK_COOLDOWN := 0.32
 const CHAR_HEIGHT := 2.25                            # slightly bigger baller
 
-# ---- one-stick shot grammar ----
-const STICK_CENTER := Vector2(540, 1560)
-const STICK_RADIUS := 120.0
-const STICK_ACTIVATE_R := 260.0
-const DOWN_CONE_DEG := 42.0
+var STICK_CENTER := Vector2(540, 1560)
+var STICK_RADIUS := 120.0
+var DOWN_CONE_DEG := 42.0
 const DOWN_MAG := 0.55
-const CHARGE_HOLD := 0.18
+var CHARGE_HOLD := 0.18
 const POWER_PULL := 0.92
 const STEPBACK_WINDOW := 1.2
-const METER_SPEED := 1.15
+var METER_SPEED := 1.15
 const SWEET_EASE := 1.35
+var SHOOT_BUTTON := true                             # true: button shoots, stick is full-360 move
+const BTN_CHARGE_RATE := 1.0 / 0.7                   # button mode: hold time -> power
+
+## TUNE panel spec: [save_key, label, min, max, step]
+const TUNABLES := [
+	["move_speed", "MOVE SPEED", 3.0, 8.0, 0.1],
+	["burst_speed", "BURST SPEED", 8.0, 18.0, 0.5],
+	["flick_speed", "FLICK SENS (lower=easier)", 1200.0, 4000.0, 50.0],
+	["down_cone", "SHOT CONE deg", 25.0, 60.0, 1.0],
+	["charge_hold", "CHARGE HOLD s", 0.10, 0.35, 0.01],
+	["meter_speed", "METER SPEED", 0.8, 1.8, 0.05],
+	["stick_radius", "STICK SIZE", 90.0, 170.0, 5.0],
+	["stick_y", "STICK HEIGHT", 1380.0, 1700.0, 10.0],
+]
+const TUNE_DEFAULTS := {"move_speed": 5.4, "burst_speed": 12.5, "flick_speed": 2400.0,
+	"down_cone": 42.0, "charge_hold": 0.18, "meter_speed": 1.15, "stick_radius": 120.0, "stick_y": 1560.0,
+	"shoot_button": 1.0}
+
+func _tuning_get(k: String) -> float:
+	var t: Dictionary = SaveManager.data.get("tuning", {})
+	return float(t.get(k, float(TUNE_DEFAULTS[k])))
+
+func _tuning_set(k: String, v: float) -> void:
+	var t: Dictionary = SaveManager.data.get("tuning", {})
+	t[k] = v
+	SaveManager.data["tuning"] = t
+	SaveManager.save_game()
+	_apply_tuning()
+
+func _apply_tuning() -> void:
+	MOVE_SPEED = _tuning_get("move_speed")
+	BURST_SPEED = _tuning_get("burst_speed")
+	FLICK_SPEED = _tuning_get("flick_speed")
+	DOWN_CONE_DEG = _tuning_get("down_cone")
+	CHARGE_HOLD = _tuning_get("charge_hold")
+	METER_SPEED = _tuning_get("meter_speed")
+	STICK_RADIUS = _tuning_get("stick_radius")
+	STICK_CENTER = Vector2(540, _tuning_get("stick_y"))
+	SHOOT_BUTTON = _tuning_get("shoot_button") >= 0.5
+	if btn_shoot:
+		btn_shoot.visible = SHOOT_BUTTON
+	if stick:
+		stick.radius = STICK_RADIUS
+		stick.size = Vector2(STICK_RADIUS * 2.0, STICK_RADIUS * 2.0)
+		stick.position = STICK_CENTER - Vector2(STICK_RADIUS, STICK_RADIUS)
+		stick.queue_redraw()
+
+func _stick_activate_r() -> float:
+	return STICK_RADIUS * 2.2
+
+
+## haptic buzz: native handhelds vibrate; web uses navigator.vibrate (Android — iOS Safari
+## blocks the vibration API, so browser play on iPhone gets screen-shake feel instead;
+## the native iOS export will buzz for real).
+func _buzz(ms: int) -> void:
+	if OS.has_feature("web"):
+		JavaScriptBridge.eval("navigator.vibrate && navigator.vibrate(%d)" % ms, true)
+	else:
+		Input.vibrate_handheld(ms)
+
+
+var _shake_amp := 0.0
+
+func _shake(amp: float) -> void:
+	_shake_amp = maxf(_shake_amp, amp)
 
 # ---- camera follow ----
 const CAM_BASE := Vector3(0, 6.9, 10.6)
@@ -81,6 +144,7 @@ var pull_depth: float = 0.0
 var cur_zone: int = ShotMath.Zone.MID
 var _was_stepback: bool = false
 var _shot_from_corner: bool = false
+var _armed: bool = true                              # corner drills: re-arm by touching the far end
 
 # player
 var player: Node3D
@@ -134,6 +198,8 @@ var pack_card: Control
 var lbl_pack: Label
 var btn_pack_get: Button
 var style_card: Control
+var tune_card: Control
+var btn_shoot: Button
 
 const JERSEY_COLORS: Array[Color] = [Color(1, 1, 1), Color(0.55, 0.65, 1.4), Color(1.3, 0.6, 0.6), Color(0.65, 1.35, 0.75)]
 const JERSEY_NAMES := ["CLASSIC", "ICE", "HEAT", "LUCKY"]
@@ -152,6 +218,7 @@ func _ready() -> void:
 	_build_hud()
 	_build_audio()
 	_apply_appearance()
+	_apply_tuning()
 	_enter_ready()
 	if "--shot" in OS.get_cmdline_user_args():
 		_capture_and_quit()
@@ -382,6 +449,24 @@ func _build_hud() -> void:
 	stick.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hud.add_child(stick)
 
+	# round SHOOT button, bottom-right (button mode)
+	btn_shoot = Button.new()
+	btn_shoot.text = "SHOOT"
+	btn_shoot.add_theme_font_size_override("font_size", 44)
+	var ssb := StyleBoxFlat.new()
+	ssb.bg_color = Color(0.85, 0.25, 0.2, 0.9)
+	ssb.set_corner_radius_all(110)
+	btn_shoot.add_theme_stylebox_override("normal", ssb)
+	var ssb2 := ssb.duplicate()
+	ssb2.bg_color = Color(1.0, 0.4, 0.3, 0.95)
+	btn_shoot.add_theme_stylebox_override("pressed", ssb2)
+	btn_shoot.add_theme_stylebox_override("hover", ssb2)
+	btn_shoot.position = Vector2(800, 1470)
+	btn_shoot.size = Vector2(220, 220)
+	btn_shoot.button_down.connect(_on_shoot_btn_down)
+	btn_shoot.button_up.connect(_on_shoot_btn_up)
+	hud.add_child(btn_shoot)
+
 	meter = ShotMeter.new()
 	meter.position = Vector2(390, 1300)
 	meter.size = Vector2(300, 64)
@@ -400,8 +485,10 @@ func _build_hud() -> void:
 	lbl_card_obj = _mk_label(level_card, "", 52, Vector2(0, 720), 1080, HORIZONTAL_ALIGNMENT_CENTER)
 	var play := _mk_card_btn(level_card, "PLAY", Color(0.25, 0.75, 0.3), Vector2(290, 1080))
 	play.pressed.connect(_on_play_pressed)
-	var style := _mk_card_btn(level_card, "STYLE", Color(0.55, 0.35, 0.9), Vector2(290, 1280))
+	var style := _mk_card_btn(level_card, "STYLE", Color(0.55, 0.35, 0.9), Vector2(150, 1280), Vector2(370, 150))
 	style.pressed.connect(_open_style)
+	var tune := _mk_card_btn(level_card, "TUNE", Color(0.9, 0.6, 0.2), Vector2(560, 1280), Vector2(370, 150))
+	tune.pressed.connect(_open_tune)
 	lbl_card_ticket = _mk_label(level_card, "", 40, Vector2(0, 1480), 1080, HORIZONTAL_ALIGNMENT_CENTER)
 
 	# ---- fail card ----
@@ -443,6 +530,44 @@ func _build_hud() -> void:
 		b2.pressed.connect(_pick_ball.bind(i))
 	var done := _mk_card_btn(style_card, "DONE", Color(0.25, 0.75, 0.3), Vector2(290, 1280))
 	done.pressed.connect(func() -> void: _enter_ready())
+
+	# ---- tune card (live analog tinkering, persisted) ----
+	tune_card = _mk_card(hud)
+	_mk_label(tune_card, "TUNE THE FEEL", 64, Vector2(0, 450), 1080, HORIZONTAL_ALIGNMENT_CENTER)
+	for i in range(TUNABLES.size()):
+		var spec: Array = TUNABLES[i]
+		var y := 560 + i * 92
+		var lab := _mk_label(tune_card, str(spec[1]), 30, Vector2(90, y), 520, HORIZONTAL_ALIGNMENT_LEFT)
+		lab.modulate = Color(1, 1, 1, 0.75)
+		var val := _mk_label(tune_card, "", 30, Vector2(840, y), 150, HORIZONTAL_ALIGNMENT_RIGHT)
+		var sl := HSlider.new()
+		sl.min_value = float(spec[2])
+		sl.max_value = float(spec[3])
+		sl.step = float(spec[4])
+		sl.value = _tuning_get(str(spec[0]))
+		sl.position = Vector2(90, y + 42)
+		sl.size = Vector2(900, 40)
+		val.text = str(sl.value)
+		var key := str(spec[0])
+		var stp := float(spec[4])
+		sl.value_changed.connect(func(v: float) -> void:
+			val.text = str(snappedf(v, stp))
+			_tuning_set(key, v))
+		tune_card.add_child(sl)
+	var tmode := _mk_card_btn(tune_card, "", Color(0.2, 0.55, 0.95), Vector2(120, 1330 - 130), Vector2(760, 100), 38)
+	var upd_mode := func() -> void:
+		tmode.text = "SHOT: BUTTON  (stick = 360 move)" if SHOOT_BUTTON else "SHOT: STICK PULL-DOWN"
+	upd_mode.call()
+	tmode.pressed.connect(func() -> void:
+		_tuning_set("shoot_button", 0.0 if SHOOT_BUTTON else 1.0)
+		upd_mode.call())
+	var treset := _mk_card_btn(tune_card, "RESET", Color(0.35, 0.35, 0.42), Vector2(120, 1350), Vector2(320, 120), 44)
+	treset.pressed.connect(func() -> void:
+		SaveManager.data["tuning"] = {}
+		SaveManager.save_game()
+		_apply_tuning())
+	var tdone := _mk_card_btn(tune_card, "DONE", Color(0.25, 0.75, 0.3), Vector2(560, 1350), Vector2(320, 120), 44)
+	tdone.pressed.connect(func() -> void: _enter_ready())
 
 
 func _mk_pill(parent: Node, pos: Vector2, sz: Vector2) -> Panel:
@@ -558,13 +683,13 @@ func _load_level_def(n: int) -> void:
 	var obj: Dictionary = d.get("objective", {})
 	level_obj_type = str(obj.get("type", "score"))
 	level_obj_count = int(obj.get("count", 0))
+	_armed = true
 
 
 func _objective_text() -> String:
 	if level_obj_type == "corner_threes":
 		var t := "SINK %d CORNER 3s" % level_obj_count
-		if level_spawn == "far":
-			t += "\nfrom the FAR END"
+		t += "\ntouch the FAR END between shots"
 		return t + "\nin %ds" % int(level_time)
 	var t2 := "%d PTS in %ds" % [level_target, int(level_time)]
 	if level_spawn == "far":
@@ -574,7 +699,7 @@ func _objective_text() -> String:
 
 # ---------- state flow ----------
 func _hide_cards() -> void:
-	for c in [level_card, fail_card, win_card, pack_card, style_card]:
+	for c in [level_card, fail_card, win_card, pack_card, style_card, tune_card]:
 		if c:
 			c.visible = false
 
@@ -618,6 +743,7 @@ func _start_attempt() -> void:
 	SaveManager.save_game()
 	score = 0; makes = 0; misses = 0; streak = 0; coins_earned = 0
 	obj_progress = 0
+	_armed = true
 	time_left = level_time
 	state = "playing"
 	_hide_cards()
@@ -630,6 +756,7 @@ func _win_level() -> void:
 	state = "results"
 	meter.active = false
 	sfx_clear.play()
+	_buzz(120)
 	_flash(Color(0.5, 1, 0.6, 0.18))
 	_play("Cheer", 0.1)
 	var rw: Dictionary = DataManager.run_levels.get("rewards", {}) if DataManager.run_levels is Dictionary else {}
@@ -654,6 +781,8 @@ func _fail_level(reason: String) -> void:
 	state = "results"
 	meter.active = false
 	sfx_fail.play()
+	_buzz(250)
+	_shake(0.2)
 	set_coins(coins() + coins_earned)
 	SaveManager.save_game()
 	var prog := ""
@@ -695,6 +824,11 @@ func _buy_pack() -> void:
 func _open_style() -> void:
 	_hide_cards()
 	style_card.visible = true
+
+
+func _open_tune() -> void:
+	_hide_cards()
+	tune_card.visible = true
 
 
 func _pick_jersey(i: int) -> void:
@@ -757,11 +891,13 @@ func _process(delta: float) -> void:
 		lbl_timer.text = str(int(ceil(time_left)))
 		lbl_timer.modulate = Color(1, 0.35, 0.3) if time_left <= 10.0 else Color(1, 1, 1)
 		_move_player(delta)
-		if _down_since >= 0.0 and _now() - _down_since >= CHARGE_HOLD:
+		if not SHOOT_BUTTON and _down_since >= 0.0 and _now() - _down_since >= CHARGE_HOLD:
 			_begin_charge()
 	elif state == "charging":
 		meter_time += delta
 		meter.t = absf(fmod(meter_time * METER_SPEED, 2.0) - 1.0)
+		if SHOOT_BUTTON:
+			pull_depth = minf(pull_depth + BTN_CHARGE_RATE * delta, 1.0)
 		meter.charge = pull_depth
 		meter.sweet = minf(ShotMath.sweet_spot(cur_zone, pull_depth >= POWER_PULL, _was_stepback) * SWEET_EASE, 0.92)
 		meter.queue_redraw()
@@ -769,7 +905,10 @@ func _process(delta: float) -> void:
 
 func _follow_camera(delta: float) -> void:
 	var target := CAM_BASE + Vector3(player.position.x * 0.42, 0, clampf((player.position.z - 2.6) * 0.30, -2.0, 2.0))
-	cam.position = cam.position.lerp(target, minf(5.0 * delta, 1.0))
+	if _shake_amp > 0.005:
+		target += Vector3(randf_range(-1, 1), randf_range(-1, 1), 0) * _shake_amp
+		_shake_amp *= pow(0.001, delta)      # fast decay
+	cam.position = cam.position.lerp(target, minf(8.0 * delta, 1.0))
 
 
 func _now() -> float:
@@ -818,6 +957,13 @@ func _move_player(delta: float) -> void:
 	pos.x = clampf(pos.x, -PLAY_X, PLAY_X)
 	pos.z = clampf(pos.z, PLAY_Z_MIN, PLAY_Z_MAX)
 	player.position = pos
+	# corner-drill re-arm: touch the far end
+	if level_obj_type == "corner_threes" and not _armed and pos.z >= PLAY_Z_MAX - 0.7:
+		_armed = true
+		_buzz(25)
+		_flash(Color(0.4, 0.9, 1.0, 0.12))
+		_popup_grade("ARMED — GO!", Color(0.4, 0.9, 1.0))
+		_refresh_hud()
 	_update_anim()
 
 
@@ -857,12 +1003,25 @@ func _play(name: String, blend: float = 0.15) -> void:
 		a.loop_mode = Animation.LOOP_NONE
 
 
+func _on_shoot_btn_down() -> void:
+	if state != "playing":
+		return
+	_buzz(10)
+	pull_depth = 0.0
+	_begin_charge()
+
+
+func _on_shoot_btn_up() -> void:
+	if state == "charging":
+		_release_shot()
+
+
 # ---------- one-stick input ----------
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventScreenTouch:
 		var t := event as InputEventScreenTouch
 		if t.pressed:
-			if state in ["playing", "charging"] and not joy_active and t.position.distance_to(STICK_CENTER) <= STICK_ACTIVATE_R:
+			if state in ["playing", "charging"] and not joy_active and t.position.distance_to(STICK_CENTER) <= _stick_activate_r():
 				joy_active = true
 				joy_index = t.index
 				_update_stick(t.position)
@@ -878,6 +1037,9 @@ func _unhandled_input(event: InputEvent) -> void:
 					_burst_dir = fdir
 					_burst_t = BURST_DUR
 					_flick_cd = FLICK_COOLDOWN
+					_buzz(15)
+					if fdir.y > 0.45:
+						_stepback_until = _now() + STEPBACK_WINDOW
 					_play(_dodge_for(fdir), 0.05)
 
 
@@ -890,7 +1052,8 @@ func _update_stick(touch_pos: Vector2) -> void:
 	stick.active = true
 	stick.queue_redraw()
 	if state == "charging":
-		pull_depth = maxf(pull_depth, _move_dir.length())
+		if not SHOOT_BUTTON:
+			pull_depth = maxf(pull_depth, _move_dir.length())
 		return
 	if _in_down_cone(_move_dir) and _move_dir.length() >= DOWN_MAG:
 		if _down_since < 0.0:
@@ -904,7 +1067,7 @@ func _update_stick(touch_pos: Vector2) -> void:
 func _on_stick_release() -> void:
 	joy_active = false
 	joy_index = -1
-	if state == "charging":
+	if state == "charging" and not SHOOT_BUTTON:
 		_release_shot()
 	elif _down_since >= 0.0 and _now() - _down_since < CHARGE_HOLD:
 		_step_back()
@@ -916,6 +1079,8 @@ func _on_stick_release() -> void:
 
 
 func _in_down_cone(v: Vector2) -> bool:
+	if SHOOT_BUTTON:
+		return false             # button mode: stick is full-360 locomotion
 	if v.length() < 0.01:
 		return false
 	return absf(rad_to_deg(v.angle_to(Vector2.DOWN))) <= DOWN_CONE_DEG
@@ -969,8 +1134,12 @@ func _release_shot() -> void:
 
 func _apply_shot(res: Dictionary, power: bool) -> void:
 	_fly_ball(res.made)
+	var was_armed := _armed
+	if level_obj_type == "corner_threes":
+		_armed = false          # every shot disarms; touch the far end to re-arm
 	if res.made:
 		sfx_swish.play()
+		_buzz(30)
 		makes += 1
 		streak += 1
 		var on_fire := streak >= 3
@@ -982,9 +1151,11 @@ func _apply_shot(res: Dictionary, power: bool) -> void:
 		var tag: String = res.zone_name
 		if _was_stepback:
 			tag = "STEP-BACK " + tag
-		if cur_zone == ShotMath.Zone.THREE and _shot_from_corner:
+		if cur_zone == ShotMath.Zone.THREE and _shot_from_corner and (level_obj_type != "corner_threes" or was_armed):
 			obj_progress += 1
 			tag = "CORNER " + tag
+		elif cur_zone == ShotMath.Zone.THREE and _shot_from_corner and not was_armed:
+			tag = "NOT ARMED — " + tag
 		_popup_grade("%s  %s!" % [tag, res.grade], Color(0.4, 1, 0.5))
 		if _objective_met():
 			_refresh_hud()
@@ -992,6 +1163,8 @@ func _apply_shot(res: Dictionary, power: bool) -> void:
 			return
 	else:
 		sfx_rim.play()
+		_buzz(70)
+		_shake(0.12)
 		misses += 1
 		streak = 0
 		_popup_grade(res.grade, Color(1, 0.5, 0.45))
@@ -1087,8 +1260,9 @@ func _flash(col: Color) -> void:
 func _refresh_hud() -> void:
 	cap_level.text = "LVL %d%s" % [run_level, " 👑" if level_boss else ""]
 	if level_obj_type == "corner_threes":
-		lbl_score.text = "%d/%d 🎯" % [obj_progress, level_obj_count]
-		lbl_score.modulate = Color(0.45, 1, 0.55) if obj_progress >= level_obj_count else Color(1, 1, 1)
+		var arm_tag := "" if _armed else " >FAR"
+		lbl_score.text = "%d/%d 🎯%s" % [obj_progress, level_obj_count, arm_tag]
+		lbl_score.modulate = Color(0.45, 1, 0.55) if obj_progress >= level_obj_count else (Color(1, 1, 1) if _armed else Color(1, 0.75, 0.4))
 	else:
 		lbl_score.text = "%d/%d" % [score, level_target]
 		lbl_score.modulate = Color(0.45, 1, 0.55) if score >= level_target else Color(1, 1, 1)
