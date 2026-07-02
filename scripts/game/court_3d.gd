@@ -533,9 +533,8 @@ func _build_hud() -> void:
 	_mk_icon(level_card, "res://assets/ui/interim/ui_logo_lockup.png", Vector2(360, 300), Vector2(360, 250))
 	lbl_card_title = _mk_label(level_card, "LEVEL 1", 92, Vector2(0, 580), 1080, HORIZONTAL_ALIGNMENT_CENTER)
 	lbl_card_obj = _mk_label(level_card, "", 52, Vector2(0, 730), 1080, HORIZONTAL_ALIGNMENT_CENTER)
-	var play := _mk_card_btn(level_card, "PLAY", Color(0.25, 0.75, 0.3), Vector2(290, 1080))
+	var play := _mk_card_btn(level_card, "PLAY", Color(0.86, 0.55, 0.12), Vector2(290, 1080), Vector2(500, 150), 64)
 	play.pressed.connect(_on_play_pressed)
-	_plank(play, &"BtnPlankGold")
 	# primary CTA breathes (Design Bible: menus breathe)
 	play.pivot_offset = play.size * 0.5
 	var breathe := create_tween().set_loops()
@@ -543,10 +542,8 @@ func _build_hud() -> void:
 	breathe.tween_property(play, "scale", Vector2.ONE, 1.5).set_trans(Tween.TRANS_SINE)
 	var style := _mk_card_btn(level_card, "STYLE", Color(0.55, 0.35, 0.9), Vector2(150, 1280), Vector2(370, 150))
 	style.pressed.connect(_open_style)
-	_plank(style, &"BtnPlankPurple")
-	var tune := _mk_card_btn(level_card, "TUNE", Color(0.9, 0.6, 0.2), Vector2(560, 1280), Vector2(370, 150))
+	var tune := _mk_card_btn(level_card, "TUNE", Color(0.13, 0.52, 0.48), Vector2(560, 1280), Vector2(370, 150))
 	tune.pressed.connect(_open_tune)
-	_plank(tune, &"BtnPlankTeal")
 	lbl_card_ticket = _mk_label(level_card, "", 40, Vector2(0, 1480), 1080, HORIZONTAL_ALIGNMENT_CENTER)
 
 	# ---- fail card ----
@@ -660,16 +657,25 @@ func _mk_card(hud: CanvasLayer) -> Control:
 	c.visible = false
 	hud.add_child(c)
 	var dim := ColorRect.new()
-	dim.color = Color(0, 0, 0, 0.72)
+	dim.color = Color(0.04, 0.02, 0.05, 0.86)
 	dim.size = Vector2(1080, 1920)
 	c.add_child(dim)
 	var card := Panel.new()
-	var csb := StyleBoxFlat.new()
-	csb.bg_color = Color(0.07, 0.07, 0.11, 0.96)
-	csb.border_color = Color(0.95, 0.34, 0.29)
-	csb.set_border_width_all(5)
-	csb.set_corner_radius_all(26)
-	card.add_theme_stylebox_override("panel", csb)
+	# painted concrete panel from the sliced kit (tiled so the interim res stays crisp);
+	# flat fallback if the slice is missing
+	if ResourceLoader.exists("res://assets/ui/interim/ui_panel_dark.png"):
+		var sbt := StyleBoxTexture.new()
+		sbt.texture = load("res://assets/ui/interim/ui_panel_dark.png")
+		sbt.set_texture_margin_all(22.0)
+		sbt.modulate_color = Color(1.06, 1.02, 0.98)
+		card.add_theme_stylebox_override("panel", sbt)
+	else:
+		var csb := StyleBoxFlat.new()
+		csb.bg_color = Color(0.07, 0.07, 0.11, 0.98)
+		csb.border_color = Color(0.95, 0.34, 0.29)
+		csb.set_border_width_all(5)
+		csb.set_corner_radius_all(26)
+		card.add_theme_stylebox_override("panel", csb)
 	card.position = Vector2(60, 420)
 	card.size = Vector2(960, 1120)
 	c.add_child(card)
