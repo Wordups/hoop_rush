@@ -177,6 +177,8 @@ var cam: Camera3D
 # audio
 var music: AudioStreamPlayer
 var sfx_swish: AudioStreamPlayer
+var sfx_bounce: AudioStreamPlayer
+var _dribble_phase: int = 0
 var sfx_rim: AudioStreamPlayer
 var sfx_clear: AudioStreamPlayer
 var sfx_fail: AudioStreamPlayer
@@ -426,7 +428,8 @@ func _build_audio() -> void:
 	music = _mk_audio("res://assets/audio/music_loop.wav", -11.0)
 	music.finished.connect(music.play)
 	music.play()
-	sfx_swish = _mk_audio("res://assets/audio/sfx_swish.wav", -3.0)
+	sfx_swish = _mk_audio("res://assets/audio/sfx_swish.wav", 0.0)
+	sfx_bounce = _mk_audio("res://assets/audio/sfx_bounce.wav", -8.0)
 	sfx_rim = _mk_audio("res://assets/audio/sfx_rim.wav", -5.0)
 	sfx_clear = _mk_audio("res://assets/audio/sfx_clear.wav", -3.0)
 	sfx_fail = _mk_audio("res://assets/audio/sfx_fail.wav", -5.0)
@@ -1039,6 +1042,12 @@ func _now() -> float:
 	return Time.get_ticks_msec() / 1000.0
 
 
+func _thump(vol_db: float = -8.0) -> void:
+	sfx_bounce.volume_db = vol_db
+	sfx_bounce.pitch_scale = randf_range(0.92, 1.1)
+	sfx_bounce.play()
+
+
 ## ball follows the player like a live dribble; held at the chest while charging
 func _update_ball(delta: float) -> void:
 	if _ball_flying:
@@ -1074,6 +1083,10 @@ func _update_ball(delta: float) -> void:
 		return
 	_move_kind = ""
 	_dribble_t += delta * (5.0 + 5.0 * _move_mag)
+	var ph := int(_dribble_t / PI)
+	if ph != _dribble_phase:
+		_dribble_phase = ph
+		_thump(-10.0 + 4.0 * _move_mag)
 	var bounce := absf(sin(_dribble_t)) * 0.85
 	var base: Vector3 = player.position + right * 0.42 * _dribble_side + f3 * 0.12
 	ball.position = Vector3(base.x, 0.14 + bounce, base.z)
@@ -1382,6 +1395,8 @@ func _bounce_ball(from: Vector3, vel: Vector3, h: float, hops: int) -> void:
 		tw.tween_method(func(t: float) -> void:
 			ball.position = start.lerp(land, t) + Vector3(0, apex * sin(PI * t), 0),
 			0.0, 1.0, dur)
+		var hop_db := -8.0 - i * 5.0
+		tw.tween_callback(func() -> void: _thump(hop_db))
 		p = land
 		vel *= 0.55
 		height *= 0.42
