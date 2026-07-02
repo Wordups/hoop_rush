@@ -58,7 +58,7 @@ const TUNABLES := [
 ]
 const TUNE_DEFAULTS := {"move_speed": 5.4, "burst_speed": 12.5, "flick_speed": 2400.0,
 	"down_cone": 42.0, "charge_hold": 0.18, "meter_speed": 1.15, "stick_radius": 120.0, "stick_y": 1620.0,
-	"shoot_button": 1.0, "cam_height": 6.6, "cam_dist": 11.4, "cam_fov": 49.0}
+	"shoot_button": 1.0, "cam_height": 5.8, "cam_dist": 9.6, "cam_fov": 49.0}
 
 func _tuning_get(k: String) -> float:
 	var t: Dictionary = SaveManager.data.get("tuning", {})
@@ -112,8 +112,8 @@ func _shake(amp: float) -> void:
 	_shake_amp = maxf(_shake_amp, amp)
 
 # ---- camera follow (height/dist/fov live in TUNE; pitch auto-aims) ----
-var CAM_BASE := Vector3(0, 6.6, 11.4)
-const CAM_AIM := Vector3(0, 2.5, -3.6)               # aim point: hoop upper third, player lower
+var CAM_BASE := Vector3(0, 5.8, 9.6)
+const CAM_AIM := Vector3(0, 2.6, -3.4)               # aim point: hoop upper third, player lower
 
 # ---- ladder / economy (defs in data/run_levels.json) ----
 var run_level: int = 1
@@ -143,6 +143,8 @@ var _move_dir: Vector2 = Vector2.ZERO
 var _down_since: float = -1.0
 var _flick_cd: float = 0.0
 var _stepback_until: float = -10.0
+var _chain_until: float = -10.0     # 200ms combo window after each move (CHARACTER_TDD §10)
+var _combo: int = 0
 
 # shot-in-progress
 var meter_time: float = 0.0
@@ -167,6 +169,7 @@ var ball: MeshInstance3D
 var ball_mat: StandardMaterial3D
 var _ball_flying: bool = false
 var _dribble_t: float = 0.0
+var courtship: BallCourtship
 var _dribble_side: float = 1.0                       # 1 = right hand, -1 = left
 var _move_kind: String = ""                          # cross | push | behind ('' = none)
 var _side_from: float = 1.0
@@ -413,6 +416,9 @@ func _build_ball() -> void:
 	ball.material_override = ball_mat
 	ball.visible = false
 	add_child(ball)
+	courtship = BallCourtship.new()
+	courtship.bind(ball)
+	add_child(courtship)
 
 
 func _build_camera() -> void:
@@ -1087,9 +1093,10 @@ func _update_ball(delta: float) -> void:
 	if ph != _dribble_phase:
 		_dribble_phase = ph
 		_thump(-10.0 + 4.0 * _move_mag)
+		courtship.squash()
 	var bounce := absf(sin(_dribble_t)) * 0.85
 	var base: Vector3 = player.position + right * 0.42 * _dribble_side + f3 * 0.12
-	ball.position = Vector3(base.x, 0.14 + bounce, base.z)
+	courtship.court(Vector3(base.x, 0.14 + bounce, base.z), delta)
 
 
 func _move_player(delta: float) -> void:
@@ -1195,7 +1202,15 @@ func _unhandled_input(event: InputEvent) -> void:
 				if not _in_down_cone(fdir):
 					_burst_dir = fdir
 					_burst_t = BURST_DUR
-					_flick_cd = FLICK_COOLDOWN
+					# cooldown = burst length: the moment a move ends, the chain window is open
+					_flick_cd = BURST_DUR
+					if _now() <= _chain_until:
+						_combo += 1
+						if _combo >= 2:
+							_popup_grade("COMBO x%d" % _combo, Color(0.55, 0.85, 1.0))
+					else:
+						_combo = 1
+					_chain_until = _now() + BURST_DUR + 0.2
 					_buzz(15)
 					# classify the basketball move: lateral = crossover,
 					# back = behind-the-back, forward = speed push
@@ -1396,7 +1411,9 @@ func _bounce_ball(from: Vector3, vel: Vector3, h: float, hops: int) -> void:
 			ball.position = start.lerp(land, t) + Vector3(0, apex * sin(PI * t), 0),
 			0.0, 1.0, dur)
 		var hop_db := -8.0 - i * 5.0
-		tw.tween_callback(func() -> void: _thump(hop_db))
+		tw.tween_callback(func() -> void:
+			_thump(hop_db)
+			courtship.squash())
 		p = land
 		vel *= 0.55
 		height *= 0.42
