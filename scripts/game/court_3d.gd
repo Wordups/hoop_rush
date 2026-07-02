@@ -28,7 +28,7 @@ var BURST_SPEED := 12.5
 const BURST_DUR := 0.22
 var FLICK_SPEED := 2400.0
 const FLICK_COOLDOWN := 0.32
-const CHAR_HEIGHT := 2.25                            # slightly bigger baller
+const CHAR_HEIGHT := 2.6                             # big enough that moves read on phone
 
 var STICK_CENTER := Vector2(540, 1560)
 var STICK_RADIUS := 120.0
@@ -161,6 +161,9 @@ var ball: MeshInstance3D
 var ball_mat: StandardMaterial3D
 var _ball_flying: bool = false
 var _dribble_t: float = 0.0
+var _dribble_side: float = 1.0                       # 1 = right hand, -1 = left
+var _move_kind: String = ""                          # cross | push | behind ('' = none)
+var _side_from: float = 1.0
 
 # camera
 var cam: Camera3D
@@ -355,7 +358,7 @@ func _combined_aabb(node: Node3D) -> AABB:
 func _build_ball() -> void:
 	ball = MeshInstance3D.new()
 	var sm := SphereMesh.new()
-	sm.radius = 0.14; sm.height = 0.28
+	sm.radius = 0.165; sm.height = 0.33
 	ball.mesh = sm
 	ball_mat = StandardMaterial3D.new()
 	ball_mat.albedo_color = BALL_COLORS[0]
@@ -926,12 +929,32 @@ func _update_ball(delta: float) -> void:
 	var f3 := Vector3(facing_vec.x, 0, facing_vec.y)
 	var right := Vector3(-facing_vec.y, 0, facing_vec.x)
 	if state == "charging":
-		var target: Vector3 = player.position + f3 * 0.28 + Vector3(0, 1.6, 0)
+		var target: Vector3 = player.position + f3 * 0.28 + Vector3(0, 1.9, 0)
 		ball.position = ball.position.lerp(target, minf(14.0 * delta, 1.0))
 		return
+	# mid-burst: choreograph the move (the ball sells it)
+	if _burst_t > 0.0 and _move_kind != "":
+		var t := 1.0 - _burst_t / BURST_DUR
+		var from_off := right * 0.42 * _side_from
+		var to_off := right * 0.42 * _dribble_side
+		var off := from_off.lerp(to_off, t)
+		var y := 0.6
+		match _move_kind:
+			"cross":
+				y = 0.62 - 0.5 * sin(PI * t)          # low, snappy V-cross
+			"behind":
+				y = 0.55 + 0.3 * sin(PI * t)          # wraps at waist height
+				off += f3 * -0.42 * sin(PI * t)       # swings behind the body
+			"push":
+				off = from_off + f3 * (0.9 * sin(PI * t))
+				y = 0.5 - 0.35 * sin(PI * t)
+		var b: Vector3 = player.position + off
+		ball.position = Vector3(b.x, maxf(y, 0.12), b.z)
+		return
+	_move_kind = ""
 	_dribble_t += delta * (5.0 + 5.0 * _move_mag)
-	var bounce := absf(sin(_dribble_t)) * 0.72
-	var base: Vector3 = player.position + right * 0.38 + f3 * 0.12
+	var bounce := absf(sin(_dribble_t)) * 0.85
+	var base: Vector3 = player.position + right * 0.42 * _dribble_side + f3 * 0.12
 	ball.position = Vector3(base.x, 0.14 + bounce, base.z)
 
 
@@ -974,7 +997,9 @@ func _update_anim() -> void:
 	if _cur_anim in ONE_SHOTS and anim and anim.is_playing():
 		return
 	if state == "charging":
-		_play("Jump_Idle")
+		_play("Jump_Start", 0.1)
+		if anim:
+			anim.speed_scale = 0.5      # slow gather; holds the loaded pose at the end
 		return
 	if _move_mag < 0.08:
 		_play("Idle")
@@ -1038,8 +1063,18 @@ func _unhandled_input(event: InputEvent) -> void:
 					_burst_t = BURST_DUR
 					_flick_cd = FLICK_COOLDOWN
 					_buzz(15)
-					if fdir.y > 0.45:
+					# classify the basketball move: lateral = crossover,
+					# back = behind-the-back, forward = speed push
+					_side_from = _dribble_side
+					if absf(fdir.x) >= absf(fdir.y):
+						_move_kind = "cross"
+						_dribble_side = -_dribble_side
+					elif fdir.y > 0.45:
+						_move_kind = "behind"
+						_dribble_side = -_dribble_side
 						_stepback_until = _now() + STEPBACK_WINDOW
+					else:
+						_move_kind = "push"
 					_play(_dodge_for(fdir), 0.05)
 
 
@@ -1129,6 +1164,12 @@ func _release_shot() -> void:
 	meter.active = false
 	state = "playing"
 	_play("Throw", 0.05)
+	if anim:
+		anim.speed_scale = 1.3
+	# rise-and-release: hop the whole rig
+	var tw := create_tween()
+	tw.tween_property(player, "position:y", 0.6, 0.2).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(player, "position:y", 0.0, 0.28).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	_apply_shot(res, power)
 
 
@@ -1185,7 +1226,7 @@ func _objective_met() -> bool:
 func _fly_ball(made: bool) -> void:
 	_ball_flying = true
 	ball.visible = true
-	var start: Vector3 = player.position + Vector3(0, 1.4, 0)
+	var start: Vector3 = player.position + Vector3(0, 2.3, 0)
 	var target := RIM_POS if made else RIM_POS + Vector3(randf_range(-0.55, 0.55), randf_range(0.05, 0.3), randf_range(-0.15, 0.3))
 	var arc := maxf(1.6, (RIM_POS.y - start.y) + 1.8)
 	var tw := create_tween()
