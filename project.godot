@@ -14,6 +14,11 @@ config/features=PackedStringArray("4.7", "Mobile")
 DataManager="*res://scripts/autoloads/data_manager.gd"
 SaveManager="*res://scripts/autoloads/save_manager.gd"
 GameManager="*res://scripts/autoloads/game_manager.gd"
+AudioManager="*res://scripts/autoloads/audio_manager.gd"
+
+[gui]
+
+theme/custom="res://ui/hoop_rush_theme.tres"
 
 [input_devices]
 

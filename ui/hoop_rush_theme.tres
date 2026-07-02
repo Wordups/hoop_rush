@@ -1,0 +1,157 @@
+[gd_resource type="Theme" load_steps=19 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/ui/interim/ui_btn_play.png" id="1"]
+
+[ext_resource type="Texture2D" path="res://assets/ui/interim/ui_btn_play_pressed.png" id="2"]
+
+[ext_resource type="Texture2D" path="res://assets/ui/interim/ui_btn_style.png" id="3"]
+
+[ext_resource type="Texture2D" path="res://assets/ui/interim/ui_btn_tune.png" id="4"]
+
+[ext_resource type="Texture2D" path="res://assets/ui/interim/ui_btn_shop.png" id="5"]
+
+[ext_resource type="Texture2D" path="res://assets/ui/interim/ui_btn_badges.png" id="6"]
+
+[ext_resource type="Texture2D" path="res://assets/ui/interim/ui_panel_dark.png" id="7"]
+
+
+[sub_resource type="StyleBoxFlat" id="sb_btn_norm"]
+bg_color = Color(0.13, 0.11, 0.15, 0.95)
+corner_radius_top_left = 18
+corner_radius_top_right = 18
+corner_radius_bottom_left = 18
+corner_radius_bottom_right = 18
+
+[sub_resource type="StyleBoxFlat" id="sb_btn_press"]
+bg_color = Color(0.22, 0.17, 0.2, 1.0)
+corner_radius_top_left = 18
+corner_radius_top_right = 18
+corner_radius_bottom_left = 18
+corner_radius_bottom_right = 18
+
+[sub_resource type="StyleBoxTexture" id="sb_BtnPlankGold_n"]
+texture = ExtResource("1")
+texture_margin_left = 20.0
+texture_margin_top = 20.0
+texture_margin_right = 20.0
+texture_margin_bottom = 20.0
+content_margin_left = 28.0
+content_margin_top = 12.0
+content_margin_right = 28.0
+content_margin_bottom = 12.0
+
+[sub_resource type="StyleBoxTexture" id="sb_BtnPlankGold_p"]
+texture = ExtResource("2")
+texture_margin_left = 20.0
+texture_margin_top = 20.0
+texture_margin_right = 20.0
+texture_margin_bottom = 20.0
+content_margin_left = 28.0
+content_margin_top = 12.0
+content_margin_right = 28.0
+content_margin_bottom = 12.0
+
+[sub_resource type="StyleBoxTexture" id="sb_BtnPlankPurple_n"]
+texture = ExtResource("3")
+texture_margin_left = 20.0
+texture_margin_top = 20.0
+texture_margin_right = 20.0
+texture_margin_bottom = 20.0
+content_margin_left = 28.0
+content_margin_top = 12.0
+content_margin_right = 28.0
+content_margin_bottom = 12.0
+
+[sub_resource type="StyleBoxTexture" id="sb_BtnPlankTeal_n"]
+texture = ExtResource("4")
+texture_margin_left = 20.0
+texture_margin_top = 20.0
+texture_margin_right = 20.0
+texture_margin_bottom = 20.0
+content_margin_left = 28.0
+content_margin_top = 12.0
+content_margin_right = 28.0
+content_margin_bottom = 12.0
+
+[sub_resource type="StyleBoxTexture" id="sb_BtnPlankRed_n"]
+texture = ExtResource("5")
+texture_margin_left = 20.0
+texture_margin_top = 20.0
+texture_margin_right = 20.0
+texture_margin_bottom = 20.0
+content_margin_left = 28.0
+content_margin_top = 12.0
+content_margin_right = 28.0
+content_margin_bottom = 12.0
+
+[sub_resource type="StyleBoxTexture" id="sb_BtnPlankBadge_n"]
+texture = ExtResource("6")
+texture_margin_left = 20.0
+texture_margin_top = 20.0
+texture_margin_right = 20.0
+texture_margin_bottom = 20.0
+content_margin_left = 28.0
+content_margin_top = 12.0
+content_margin_right = 28.0
+content_margin_bottom = 12.0
+
+[sub_resource type="StyleBoxTexture" id="sb_panel"]
+texture = ExtResource("7")
+texture_margin_left = 26.0
+texture_margin_top = 26.0
+texture_margin_right = 26.0
+texture_margin_bottom = 26.0
+content_margin_left = 28.0
+content_margin_top = 12.0
+content_margin_right = 28.0
+content_margin_bottom = 12.0
+
+[sub_resource type="StyleBoxFlat" id="sb_prog_bg"]
+bg_color = Color(0.1, 0.08, 0.12, 0.9)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_left = 12
+corner_radius_bottom_right = 12
+
+[sub_resource type="StyleBoxFlat" id="sb_prog_fill"]
+bg_color = Color(0.91, 0.64, 0.24, 1.0)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_left = 10
+corner_radius_bottom_right = 10
+
+[resource]
+Button/styles/normal = SubResource("sb_btn_norm")
+Button/styles/hover = SubResource("sb_btn_press")
+Button/styles/pressed = SubResource("sb_btn_press")
+Button/colors/font_color = Color(0.96, 0.91, 0.82, 1)
+Button/colors/font_pressed_color = Color(1, 1, 1, 1)
+Button/colors/font_hover_color = Color(1, 0.97, 0.9, 1)
+Button/colors/font_outline_color = Color(0, 0, 0, 0.85)
+Button/constants/outline_size = 6
+PanelContainer/styles/panel = SubResource("sb_panel")
+ProgressBar/styles/background = SubResource("sb_prog_bg")
+ProgressBar/styles/fill = SubResource("sb_prog_fill")
+Label/colors/font_color = Color(0.96, 0.91, 0.82, 1)
+Label/colors/font_outline_color = Color(0, 0, 0, 0.85)
+Label/constants/outline_size = 6
+BtnPlankGold/base_type = &"Button"
+BtnPlankGold/styles/normal = SubResource("sb_BtnPlankGold_n")
+BtnPlankGold/styles/pressed = SubResource("sb_BtnPlankGold_p")
+BtnPlankGold/styles/hover = SubResource("sb_BtnPlankGold_p")
+BtnPlankPurple/base_type = &"Button"
+BtnPlankPurple/styles/normal = SubResource("sb_BtnPlankPurple_n")
+BtnPlankPurple/styles/pressed = SubResource("sb_BtnPlankPurple_n")
+BtnPlankPurple/styles/hover = SubResource("sb_BtnPlankPurple_n")
+BtnPlankTeal/base_type = &"Button"
+BtnPlankTeal/styles/normal = SubResource("sb_BtnPlankTeal_n")
+BtnPlankTeal/styles/pressed = SubResource("sb_BtnPlankTeal_n")
+BtnPlankTeal/styles/hover = SubResource("sb_BtnPlankTeal_n")
+BtnPlankRed/base_type = &"Button"
+BtnPlankRed/styles/normal = SubResource("sb_BtnPlankRed_n")
+BtnPlankRed/styles/pressed = SubResource("sb_BtnPlankRed_n")
+BtnPlankRed/styles/hover = SubResource("sb_BtnPlankRed_n")
+BtnPlankBadge/base_type = &"Button"
+BtnPlankBadge/styles/normal = SubResource("sb_BtnPlankBadge_n")
+BtnPlankBadge/styles/pressed = SubResource("sb_BtnPlankBadge_n")
+BtnPlankBadge/styles/hover = SubResource("sb_BtnPlankBadge_n")

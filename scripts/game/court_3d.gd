@@ -30,7 +30,7 @@ var FLICK_SPEED := 2400.0
 const FLICK_COOLDOWN := 0.32
 const CHAR_HEIGHT := 2.6                             # big enough that moves read on phone
 
-var STICK_CENTER := Vector2(540, 1560)
+var STICK_CENTER := Vector2(540, 1620)
 var STICK_RADIUS := 120.0
 var DOWN_CONE_DEG := 42.0
 const DOWN_MAG := 0.55
@@ -52,10 +52,13 @@ const TUNABLES := [
 	["meter_speed", "METER SPEED", 0.8, 1.8, 0.05],
 	["stick_radius", "STICK SIZE", 90.0, 170.0, 5.0],
 	["stick_y", "STICK HEIGHT", 1380.0, 1700.0, 10.0],
+	["cam_height", "CAM HEIGHT", 4.2, 8.6, 0.1],
+	["cam_dist", "CAM DISTANCE", 7.0, 13.0, 0.1],
+	["cam_fov", "CAM FOV", 42.0, 62.0, 1.0],
 ]
 const TUNE_DEFAULTS := {"move_speed": 5.4, "burst_speed": 12.5, "flick_speed": 2400.0,
-	"down_cone": 42.0, "charge_hold": 0.18, "meter_speed": 1.15, "stick_radius": 120.0, "stick_y": 1560.0,
-	"shoot_button": 1.0}
+	"down_cone": 42.0, "charge_hold": 0.18, "meter_speed": 1.15, "stick_radius": 120.0, "stick_y": 1620.0,
+	"shoot_button": 1.0, "cam_height": 6.6, "cam_dist": 11.4, "cam_fov": 49.0}
 
 func _tuning_get(k: String) -> float:
 	var t: Dictionary = SaveManager.data.get("tuning", {})
@@ -80,6 +83,9 @@ func _apply_tuning() -> void:
 	SHOOT_BUTTON = _tuning_get("shoot_button") >= 0.5
 	if btn_shoot:
 		btn_shoot.visible = SHOOT_BUTTON
+	CAM_BASE = Vector3(0, _tuning_get("cam_height"), _tuning_get("cam_dist"))
+	if cam:
+		cam.fov = _tuning_get("cam_fov")
 	if stick:
 		stick.radius = STICK_RADIUS
 		stick.size = Vector2(STICK_RADIUS * 2.0, STICK_RADIUS * 2.0)
@@ -105,9 +111,9 @@ var _shake_amp := 0.0
 func _shake(amp: float) -> void:
 	_shake_amp = maxf(_shake_amp, amp)
 
-# ---- camera follow ----
-const CAM_BASE := Vector3(0, 6.9, 10.6)
-const CAM_PITCH := -27.0
+# ---- camera follow (height/dist/fov live in TUNE; pitch auto-aims) ----
+var CAM_BASE := Vector3(0, 6.6, 11.4)
+const CAM_AIM := Vector3(0, 2.5, -3.6)               # aim point: hoop upper third, player lower
 
 # ---- ladder / economy (defs in data/run_levels.json) ----
 var run_level: int = 1
@@ -224,6 +230,8 @@ func _ready() -> void:
 	_apply_tuning()
 	_enter_ready()
 	if "--shot" in OS.get_cmdline_user_args():
+		if "--play" in OS.get_cmdline_user_args():
+			_start_attempt()
 		_capture_and_quit()
 
 
@@ -260,24 +268,43 @@ func _build_environment() -> void:
 	env.background_mode = Environment.BG_SKY
 	var sky := Sky.new()
 	var mat := ProceduralSkyMaterial.new()
-	mat.sky_top_color = Color(0.35, 0.28, 0.5)
-	mat.sky_horizon_color = Color(0.9, 0.5, 0.35)
+	mat.sky_top_color = Color(0.45, 0.22, 0.38)
+	mat.sky_horizon_color = Color(0.98, 0.55, 0.3)
 	mat.ground_horizon_color = Color(0.2, 0.16, 0.2)
 	mat.ground_bottom_color = Color(0.08, 0.07, 0.1)
 	sky.sky_material = mat
 	env.sky = sky
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.ambient_light_energy = 0.6
+	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	env.ambient_light_color = Color(0.85, 0.5, 0.42)   # sunset bounce fill
+	env.ambient_light_energy = 0.7
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	# grade: warmer, richer, one palette with the painting
+	env.adjustment_enabled = true
+	env.adjustment_brightness = 1.03
+	env.adjustment_contrast = 1.06
+	env.adjustment_saturation = 1.18
+	# low warm haze so the floor dissolves into the backdrop instead of butting against it
+	env.fog_enabled = true
+	env.fog_light_color = Color(0.93, 0.55, 0.38)
+	env.fog_density = 0.012
+	env.fog_sky_affect = 0.0
 	we.environment = env
 	add_child(we)
 
+	# sun matched to the painted backdrop: low, upper-center, shadows raking toward camera
 	var sun := DirectionalLight3D.new()
-	sun.rotation_degrees = Vector3(-52, -46, 0)
-	sun.light_energy = 1.15
-	sun.light_color = Color(1.0, 0.85, 0.7)
+	sun.rotation_degrees = Vector3(-33, 180, 0)
+	sun.light_energy = 1.35
+	sun.light_color = Color(1.0, 0.69, 0.4)      # ~#ffb066
 	sun.shadow_enabled = true
 	add_child(sun)
+
+	var fill := DirectionalLight3D.new()
+	fill.rotation_degrees = Vector3(-38, 0, 0)
+	fill.light_energy = 0.5
+	fill.light_color = Color(1.0, 0.75, 0.6)
+	fill.shadow_enabled = false
+	add_child(fill)
 
 
 func _build_floor() -> void:
@@ -287,14 +314,15 @@ func _build_floor() -> void:
 	mi.mesh = plane
 	var mat := StandardMaterial3D.new()
 	mat.albedo_texture = load("res://assets/court_3d_floor.png") as Texture2D
-	mat.roughness = 0.75
+	mat.albedo_color = Color(1.06, 0.98, 0.9)   # slight warm cast on top of the repaint
+	mat.roughness = 0.72
 	mi.material_override = mat
 	add_child(mi)
 
 
 func _build_backdrop() -> void:
 	var tex := load("res://assets/backdrop_city.png") as Texture2D
-	var H := 8.4
+	var H := 9.8
 	var aspect := float(tex.get_width()) / float(tex.get_height())
 	var quad := QuadMesh.new()
 	quad.size = Vector2(H * aspect, H)
@@ -304,9 +332,26 @@ func _build_backdrop() -> void:
 	mat.albedo_texture = tex
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mat.disable_fog = true
 	mi.material_override = mat
 	mi.position = Vector3(0, H * 0.5 - 0.15, (COURT_D * -0.5) - 1.4)
 	add_child(mi)
+
+	# soft painted haze strip along the far court edge (seam blend)
+	var hz := QuadMesh.new()
+	hz.size = Vector2(COURT_W + 4.0, 2.4)
+	var hmi := MeshInstance3D.new()
+	hmi.mesh = hz
+	var hmat := StandardMaterial3D.new()
+	hmat.albedo_texture = load("res://assets/fx/haze_strip.png") as Texture2D
+	hmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	hmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	hmat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	hmat.disable_fog = true
+	hmi.material_override = hmat
+	hmi.rotation_degrees = Vector3(12, 0, 0)
+	hmi.position = Vector3(0, 1.05, (COURT_D * -0.5) + 0.35)
+	add_child(hmi)
 
 
 func _build_hoop() -> void:
@@ -333,7 +378,7 @@ func _build_hoop() -> void:
 
 func _build_player() -> void:
 	player = Node3D.new()
-	player.position = Vector3(0, 0, 2.6)
+	player.position = Vector3(0, 0, 1.4)
 	add_child(player)
 	var scene := load("res://assets/models/player_placeholder.glb") as PackedScene
 	model = scene.instantiate() as Node3D
@@ -371,10 +416,10 @@ func _build_ball() -> void:
 func _build_camera() -> void:
 	cam = Camera3D.new()
 	cam.position = CAM_BASE
-	cam.rotation_degrees = Vector3(CAM_PITCH, 0, 0)
-	cam.fov = 56.0
+	cam.fov = 50.0
 	add_child(cam)
 	cam.make_current()
+	cam.look_at_from_position(CAM_BASE, CAM_AIM)
 
 
 func _build_audio() -> void:
@@ -402,7 +447,7 @@ func _build_hud() -> void:
 
 	# top-left: coins pill + [+]
 	var coin_pill := _mk_pill(hud, Vector2(30, 40), Vector2(330, 92))
-	_mk_dot(coin_pill, Color(1.0, 0.78, 0.2), Vector2(46, 46), 30)
+	_mk_icon(coin_pill, "res://assets/ui/interim/icon_coin.png", Vector2(12, 12), Vector2(68, 68))
 	lbl_coins = _mk_label(coin_pill, "0", 44, Vector2(88, 18), 160, HORIZONTAL_ALIGNMENT_LEFT)
 	var plus := Button.new()
 	plus.text = "+"
@@ -415,7 +460,8 @@ func _build_hud() -> void:
 
 	# top-right: tokens pill
 	var tok_pill := _mk_pill(hud, Vector2(770, 40), Vector2(280, 92))
-	_mk_dot(tok_pill, Color(0.95, 0.34, 0.29), Vector2(46, 46), 30)
+	# TEMP art: poker-chip slice, tagged for replacement (Design Bible: no casino visuals)
+	_mk_icon(tok_pill, "res://assets/ui/interim/icon_token_TEMP_REPLACE.png", Vector2(12, 12), Vector2(68, 68))
 	lbl_tokens = _mk_label(tok_pill, "5", 44, Vector2(88, 18), 160, HORIZONTAL_ALIGNMENT_LEFT)
 
 	# top-center scoreboard
@@ -484,20 +530,29 @@ func _build_hud() -> void:
 
 	# ---- level card (Royal-Match style) ----
 	level_card = _mk_card(hud)
-	lbl_card_title = _mk_label(level_card, "LEVEL 1", 92, Vector2(0, 560), 1080, HORIZONTAL_ALIGNMENT_CENTER)
-	lbl_card_obj = _mk_label(level_card, "", 52, Vector2(0, 720), 1080, HORIZONTAL_ALIGNMENT_CENTER)
+	_mk_icon(level_card, "res://assets/ui/interim/ui_logo_lockup.png", Vector2(360, 300), Vector2(360, 250))
+	lbl_card_title = _mk_label(level_card, "LEVEL 1", 92, Vector2(0, 580), 1080, HORIZONTAL_ALIGNMENT_CENTER)
+	lbl_card_obj = _mk_label(level_card, "", 52, Vector2(0, 730), 1080, HORIZONTAL_ALIGNMENT_CENTER)
 	var play := _mk_card_btn(level_card, "PLAY", Color(0.25, 0.75, 0.3), Vector2(290, 1080))
 	play.pressed.connect(_on_play_pressed)
+	_plank(play, &"BtnPlankGold")
+	# primary CTA breathes (Design Bible: menus breathe)
+	play.pivot_offset = play.size * 0.5
+	var breathe := create_tween().set_loops()
+	breathe.tween_property(play, "scale", Vector2.ONE * 1.018, 1.5).set_trans(Tween.TRANS_SINE)
+	breathe.tween_property(play, "scale", Vector2.ONE, 1.5).set_trans(Tween.TRANS_SINE)
 	var style := _mk_card_btn(level_card, "STYLE", Color(0.55, 0.35, 0.9), Vector2(150, 1280), Vector2(370, 150))
 	style.pressed.connect(_open_style)
+	_plank(style, &"BtnPlankPurple")
 	var tune := _mk_card_btn(level_card, "TUNE", Color(0.9, 0.6, 0.2), Vector2(560, 1280), Vector2(370, 150))
 	tune.pressed.connect(_open_tune)
+	_plank(tune, &"BtnPlankTeal")
 	lbl_card_ticket = _mk_label(level_card, "", 40, Vector2(0, 1480), 1080, HORIZONTAL_ALIGNMENT_CENTER)
 
 	# ---- fail card ----
 	fail_card = _mk_card(hud)
 	lbl_fail = _mk_label(fail_card, "", 56, Vector2(0, 560), 1080, HORIZONTAL_ALIGNMENT_CENTER)
-	btn_retry = _mk_card_btn(fail_card, "RETRY  1 🎟", Color(0.85, 0.25, 0.2), Vector2(290, 1080))
+	btn_retry = _mk_card_btn(fail_card, "RETRY (1 TOKEN)", Color(0.85, 0.25, 0.2), Vector2(290, 1080))
 	btn_retry.pressed.connect(_on_retry_pressed)
 	var giveup := _mk_card_btn(fail_card, "BACK", Color(0.35, 0.35, 0.42), Vector2(290, 1280))
 	giveup.pressed.connect(func() -> void: _enter_ready())
@@ -628,6 +683,11 @@ func _mk_card_btn(parent: Control, txt: String, col: Color, pos: Vector2, sz: Ve
 	_style_btn(b, col)
 	b.position = pos
 	b.size = sz
+	b.pivot_offset = sz * 0.5
+	b.button_down.connect(func() -> void:
+		AudioManager.play("button_press")
+		b.scale = Vector2.ONE * 1.08
+		create_tween().tween_property(b, "scale", Vector2.ONE, 0.12).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT))
 	parent.add_child(b)
 	return b
 
@@ -641,6 +701,60 @@ func _style_btn(b: Button, col: Color) -> void:
 	sb2.bg_color = col.lightened(0.2)
 	b.add_theme_stylebox_override("pressed", sb2)
 	b.add_theme_stylebox_override("hover", sb2)
+
+
+func _mk_icon(parent: Node, path: String, pos: Vector2, sz: Vector2) -> TextureRect:
+	var tr := TextureRect.new()
+	if ResourceLoader.exists(path):
+		tr.texture = load(path)
+	tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	tr.position = pos
+	tr.size = sz
+	tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(tr)
+	return tr
+
+
+## switch a button to a painted plank variation (interim planks carry baked text)
+func _plank(b: Button, variation: StringName, keep_text: bool = false) -> void:
+	for st in ["normal", "pressed", "hover"]:
+		b.remove_theme_stylebox_override(st)
+	b.theme_type_variation = variation
+	if not keep_text:
+		b.text = ""
+
+
+## Design Bible: nothing appears at full opacity on frame one
+func _show_card(c: Control) -> void:
+	_hide_cards()
+	c.visible = true
+	c.modulate.a = 0.0
+	var kids := c.get_children()
+	var panel: Control = kids[1] if kids.size() > 1 else null
+	var tw := create_tween().set_parallel(true)
+	tw.tween_property(c, "modulate:a", 1.0, 0.14)
+	if panel is Control:
+		var end_y: float = (panel as Control).position.y
+		(panel as Control).position.y = end_y + 46.0
+		tw.tween_property(panel, "position:y", end_y, 0.18).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	AudioManager.play("panel_open")
+
+
+## coins scatter-fly to the coin pill on award
+func _coin_scatter(count: int) -> void:
+	var hud := lbl_coins.get_parent().get_parent()   # pill -> CanvasLayer
+	var target: Vector2 = Vector2(60, 60)
+	for i in range(count):
+		var c := _mk_icon(hud, "res://assets/ui/interim/icon_coin.png",
+			Vector2(540, 980) + Vector2(randf_range(-140, 140), randf_range(-60, 60)), Vector2(56, 56))
+		var tw := create_tween()
+		tw.tween_interval(0.04 * i)
+		tw.tween_property(c, "position", target, 0.5).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+		tw.tween_callback(c.queue_free)
+	var tw2 := create_tween()
+	tw2.tween_interval(0.04 * count + 0.5)
+	tw2.tween_callback(_refresh_hud)
 
 
 func _mk_label(parent: Node, txt: String, fs: int, pos: Vector2, width: float, align: int) -> Label:
@@ -716,8 +830,8 @@ func _enter_ready() -> void:
 	lbl_card_title.text = "LEVEL %d%s" % [run_level, "  👑" if level_boss else ""]
 	lbl_card_obj.text = _objective_text()
 	var cost := int(_eco().get("retry_cost", 1))
-	lbl_card_ticket.text = "🎟 FREE" if level_attempts == 0 else "🎟 costs %d token%s (you have %d)" % [cost, "s" if cost > 1 else "", tokens()]
-	level_card.visible = true
+	lbl_card_ticket.text = "FREE PLAY" if level_attempts == 0 else "costs %d token%s — you have %d" % [cost, "s" if cost > 1 else "", tokens()]
+	_show_card(level_card)
 	_refresh_hud()
 
 
@@ -750,7 +864,7 @@ func _start_attempt() -> void:
 	time_left = level_time
 	state = "playing"
 	_hide_cards()
-	var z := PLAY_Z_MAX - 0.4 if level_spawn == "far" else 2.6
+	var z := PLAY_Z_MAX - 0.4 if level_spawn == "far" else 1.4
 	player.position = Vector3(0, 0, z)
 	_refresh_hud()
 
@@ -773,10 +887,11 @@ func _win_level() -> void:
 	SaveManager.data["level_attempts"] = 0
 	_award_xp(xp_earned)
 	SaveManager.save_game()
-	lbl_win.text = "LEVEL %d CLEARED!%s\n\n+%d coins\n+%d tokens 🎟\n+%d XP" % [
+	lbl_win.text = "LEVEL %d CLEARED!%s\n\n+%d coins\n+%d tokens\n+%d XP" % [
 		run_level, ("  👑" if level_boss else ""), coin_gain, tok_gain, xp_earned]
-	_hide_cards()
-	win_card.visible = true
+	_show_card(win_card)
+	AudioManager.play("reward_claim")
+	_coin_scatter(8)
 	_refresh_hud()
 
 
@@ -795,9 +910,8 @@ func _fail_level(reason: String) -> void:
 		prog = "%d/%d" % [score, level_target]
 	lbl_fail.text = "%s\n\nLEVEL %d\n%s\n\nRun it back?" % [reason, run_level, prog]
 	var cost := int(_eco().get("retry_cost", 1))
-	btn_retry.text = "RETRY  %d 🎟" % cost
-	_hide_cards()
-	fail_card.visible = true
+	btn_retry.text = "RETRY (%d TOKEN)" % cost
+	_show_card(fail_card)
 	_refresh_hud()
 
 
@@ -805,11 +919,10 @@ func _open_pack() -> void:
 	var e := _eco()
 	var pc := int(e.get("pack_cost_coins", 400))
 	var pt := int(e.get("pack_tokens", 5))
-	lbl_pack.text = "TOKEN PACK\n\n%d tokens 🎟\nfor %d coins\n\nyou have %d coins" % [pt, pc, coins()]
+	lbl_pack.text = "TOKEN PACK\n\n%d tokens\nfor %d coins\n\nyou have %d coins" % [pt, pc, coins()]
 	btn_pack_get.disabled = coins() < pc
 	btn_pack_get.text = "GET PACK" if coins() >= pc else "NEED %d COINS" % pc
-	_hide_cards()
-	pack_card.visible = true
+	_show_card(pack_card)
 
 
 func _buy_pack() -> void:
@@ -825,13 +938,12 @@ func _buy_pack() -> void:
 
 
 func _open_style() -> void:
-	_hide_cards()
-	style_card.visible = true
+	AudioManager.play("cosmetic")
+	_show_card(style_card)
 
 
 func _open_tune() -> void:
-	_hide_cards()
-	tune_card.visible = true
+	_show_card(tune_card)
 
 
 func _pick_jersey(i: int) -> void:
@@ -907,11 +1019,14 @@ func _process(delta: float) -> void:
 
 
 func _follow_camera(delta: float) -> void:
-	var target := CAM_BASE + Vector3(player.position.x * 0.42, 0, clampf((player.position.z - 2.6) * 0.30, -2.0, 2.0))
+	var target := CAM_BASE + Vector3(player.position.x * 0.42, 0, clampf((player.position.z - 1.4) * 0.30, -2.0, 2.0))
 	if _shake_amp > 0.005:
 		target += Vector3(randf_range(-1, 1), randf_range(-1, 1), 0) * _shake_amp
 		_shake_amp *= pow(0.001, delta)      # fast decay
 	cam.position = cam.position.lerp(target, minf(8.0 * delta, 1.0))
+	# pitch auto-aims: hoop stays upper third whatever height/dist TUNE picks
+	var aim := CAM_AIM + Vector3(player.position.x * 0.2, 0, 0)
+	cam.look_at(aim)
 
 
 func _now() -> float:
